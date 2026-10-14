@@ -1,0 +1,56 @@
+name: Release do Jarvis
+
+# Para publicar uma versão: suba "version" em !Jarvis3d/desktop/package.json (ex.: 0.2.1), faça commit e crie a tag igual com "v" na frente:
+#   git tag v0.2.1 && git push origin v0.2.1
+# O GitHub gera o instalador (JarvisSetup-X.exe), o latest.yml e o .blockmap e publica tudo numa Release.
+# É isso que o Jarvis instalado consulta para se atualizar sozinho.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: '!Jarvis3d'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Conferir que a tag bate com a versão do package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $v = (Get-Content desktop/package.json -Raw | ConvertFrom-Json).version
+          if ("v$v" -ne "${{ github.ref_name }}") { Write-Error "A tag ${{ github.ref_name }} não bate com a versão $v do package.json"; exit 1 }
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Dependências do servidor (versões travadas) e PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r empacotar/requirements-lock.txt
+          python -m pip install pyinstaller
+
+      - name: Empacotar o servidor Python
+        run: python -m PyInstaller empacotar/jarvis-server.spec --noconfirm --distpath dist-server --workpath build-server
+
+      - name: Dependências da casca Electron
+        working-directory: '!Jarvis3d/desktop'
+        run: npm ci
+
+      - name: Gerar o instalador e publicar na Release
+        working-directory: '!Jarvis3d/desktop'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win --publish always

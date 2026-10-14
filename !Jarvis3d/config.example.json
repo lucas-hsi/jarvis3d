@@ -1,0 +1,37 @@
+{
+  "anthropic_api_key": "COLE_AQUI_SUA_CHAVE_DA_ANTHROPIC",
+  "elevenlabs_api_key": "COLE_AQUI_SUA_CHAVE_DA_ELEVENLABS (opcional)",
+  "elevenlabs_voice_id": "JBFqnCBsd6RMkjVDRZzb",
+  "elevenlabs_modelo": "eleven_flash_v2_5",
+  "nome": "",
+  "tratamento": "chefe",
+  "cidade": "",
+  "modelo": "claude-haiku-5-5",
+  "esforco": "low",
+  "cofre_obsidian": "",
+  "notas_pendencias": [],
+  "programas": {
+    "obsidian": "obsidian://open",
+    "chrome": "chrome",
+    "spotify": "https://open.spotify.com",
+    "explorador de arquivos": "explorer",
+    "calculadora": "calc",
+    "bloco de notas": "notepad",
+    "edge": "msedge",
+    "configurações": "ms-settings:",
+    "gerenciador de tarefas": "taskmgr"
+  },
+  "porta": 8340,
+  "palmas_sensibilidade": 1.0,
+  "pastas_liberadas": [
+    "C:/Users/SEU_USUARIO/Downloads",
+    "C:/Users/SEU_USUARIO/Documents",
+    "C:/Users/SEU_USUARIO/Desktop"
+  ],
+  "musica_volume": 0.85,
+  "musica_inicio_seg": 0,
+  "musica_na_abertura": false,
+  "exigir_chamada": true,
+  "janela_conversa_seg": 90,
+  "camera": true
+}

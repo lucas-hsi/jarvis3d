@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voz do Jarvis</title>
+<link rel="icon" type="image/png" href="/static/icone.png">
+<style>
+  :root { --c1:#00e5ff; --c2:#7df9ff; --bg:#02060d; --linha:rgba(0,229,255,.26); --texto:#cdeff7; --suave:rgba(150,215,232,.6); --ok:#50ffaa; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: radial-gradient(ellipse at top, #06222f, var(--bg) 60%); color: var(--texto); font-family: Bahnschrift, "Segoe UI", sans-serif; min-height: 100vh; padding: 4vh 5vw; }
+  h1 { font-size: 22px; letter-spacing: .4em; color: var(--c2); text-shadow: 0 0 16px rgba(0,229,255,.5); font-weight: 700; }
+  .sub { color: var(--suave); font-size: 14px; margin: 10px 0 26px; max-width: 760px; line-height: 1.55; }
+  .voz { display: grid; grid-template-columns: 1fr auto; gap: 14px 20px; align-items: center; padding: 16px 18px; margin-bottom: 12px; background: rgba(3,16,28,.6); border: 1px solid var(--linha); max-width: 860px; }
+  .voz.ativa { border-color: var(--ok); box-shadow: 0 0 22px rgba(80,255,170,.18); }
+  .nome { font-size: 18px; letter-spacing: .12em; color: var(--c2); }
+  .desc { font-size: 12px; color: var(--suave); margin-top: 3px; letter-spacing: .06em; }
+  audio { grid-column: 1 / -1; width: 100%; height: 34px; }
+  button { background: none; border: 1px solid var(--c1); color: var(--c2); padding: 9px 16px; cursor: pointer; font: inherit; font-size: 12px; letter-spacing: .2em; }
+  button:hover { background: rgba(0,229,255,.16); }
+  .voz.ativa button { border-color: var(--ok); color: var(--ok); cursor: default; }
+  #aviso { color: var(--ok); margin: 14px 0; min-height: 22px; letter-spacing: .08em; }
+  .vazio { color: var(--suave); }
+</style>
+</head>
+<body>
+<h1>VOZ DO JARVIS</h1>
+<p class="sub">Todas dizem as mesmas frases (normal, empolgado, urgente, sarcástico e preocupado) no modelo expressivo, com sotaque brasileiro. Ouça e clique em <b>USAR ESTA VOZ</b>: vale na hora, sem reiniciar, e fica salva.</p>
+<div id="aviso"></div>
+<div id="lista"><p class="vazio">Carregando...</p></div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  async function carregar() {
+    const r = await (await fetch('/api/vozes')).json();
+    const lista = $('lista');
+    lista.innerHTML = '';
+    if (!r.vozes.length) { lista.innerHTML = '<p class="vazio">Nenhuma amostra ainda. Rode scripts\\gerar_amostras_voz.py.</p>'; return; }
+    for (const v of r.vozes) {
+      const d = document.createElement('div');
+      d.className = 'voz' + (v.ativa ? ' ativa' : '');
+      d.innerHTML = `<div><div class="nome"></div><div class="desc"></div></div><button type="button"></button><audio controls preload="none"></audio>`;
+      d.querySelector('.nome').textContent = v.nome + (v.ativa ? '  (em uso)' : '');
+      d.querySelector('.desc').textContent = v.descricao;
+      d.querySelector('audio').src = '/api/vozes/amostra/' + encodeURIComponent(v.nome);
+      const b = d.querySelector('button');
+      b.textContent = v.ativa ? 'EM USO' : 'USAR ESTA VOZ';
+      if (!v.ativa) b.onclick = async () => {
+        const x = await (await fetch('/api/vozes/usar', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ voice_id: v.voice_id }) })).json();
+        $('aviso').textContent = x.ok ? `Pronto! O Jarvis agora fala com a voz ${v.nome}.` : 'Não consegui trocar: ' + (x.erro || '');
+        carregar();
+      };
+      lista.appendChild(d);
+    }
+  }
+  carregar();
+</script>
+</body>
+</html>

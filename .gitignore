@@ -1,0 +1,19 @@
+# nunca vão para o repositório: chaves, dados do usuário, builds
+config.json
+ajustes.json
+segredos/
+memoria/
+musica/
+fillers/
+cuda/
+vozes-teste/
+logs/
+*.log
+.env
+node_modules/
+dist/
+dist-server/
+build-server/
+__pycache__/
+*.pyc
+.venv/

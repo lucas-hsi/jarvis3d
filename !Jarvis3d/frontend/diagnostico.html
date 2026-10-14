@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jarvis · Diagnóstico</title>
+<style>
+  :root { --bg:#05080c; --card:#0b131b; --linha:#16303f; --ciano:#4fd8ff; --txt:#cfeaf5; --mudo:#7a9aa8; --ok:#3ddc97; --av:#ffc857; --er:#ff5d6c; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:15px/1.45 "Segoe UI", system-ui, sans-serif; padding:28px; }
+  h1 { font-size:22px; letter-spacing:.12em; color:var(--ciano); margin:0 0 4px; }
+  h2 { font-size:13px; letter-spacing:.14em; text-transform:uppercase; color:var(--ciano); margin:0 0 12px; }
+  p.sub { color:var(--mudo); margin:0 0 22px; }
+  .grade { display:grid; grid-template-columns:repeat(auto-fit,minmax(420px,1fr)); gap:16px; }
+  .card { background:var(--card); border:1px solid var(--linha); border-radius:14px; padding:18px 20px; }
+  .card.larga { grid-column:1/-1; }
+  .item { display:grid; grid-template-columns:62px 1fr; gap:10px; padding:6px 0; border-bottom:1px dashed #112430; }
+  .item:last-child { border-bottom:0; }
+  .tag { font:600 11px/1 "Segoe UI"; padding:5px 0; text-align:center; border-radius:6px; align-self:start; margin-top:2px; }
+  .ok { background:#0f3a2a; color:var(--ok); } .aviso { background:#3b2f0d; color:var(--av); } .erro { background:#42151b; color:var(--er); } .info { background:#12303d; color:var(--ciano); }
+  .dica { color:var(--mudo); font-size:13px; }
+  button, select { background:#0f2230; color:var(--txt); border:1px solid #1f4a60; border-radius:8px; padding:8px 12px; font:inherit; cursor:pointer; }
+  button:hover { border-color:var(--ciano); } button:disabled { opacity:.5; cursor:default; }
+  .linha { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:8px 0; }
+  .barra { height:14px; background:#0a1822; border:1px solid var(--linha); border-radius:7px; overflow:hidden; flex:1; min-width:200px; }
+  .barra > i { display:block; height:100%; width:0; background:linear-gradient(90deg,var(--ok),var(--av) 75%,var(--er)); transition:width .06s; }
+  video { width:100%; max-width:420px; border-radius:10px; background:#000; border:1px solid var(--linha); }
+  .caixa { background:#08121a; border:1px solid var(--linha); border-radius:10px; padding:10px 12px; min-height:48px; font-size:14px; }
+  .mini { font-size:12px; color:var(--mudo); }
+  label.chk { display:inline-flex; gap:6px; align-items:center; color:var(--mudo); font-size:13px; }
+</style>
+</head>
+<body>
+<h1>DIAGNÓSTICO</h1>
+<p class="sub">Confere se esta máquina está pronta para o Jarvis. Nada aqui é salvo nem enviado: os testes de áudio e câmera acontecem só neste computador.</p>
+
+<div class="grade">
+  <div class="card larga">
+    <h2>Servidor e máquina</h2>
+    <div class="linha">
+      <button id="b-servidor">Rodar de novo</button>
+      <button id="b-mic-servidor">Testar o microfone pelo servidor (3 s: fale)</button>
+      <button id="b-chaves">Validar chaves de API</button>
+      <button id="b-rede">Testar a rede</button>
+      <span class="mini" id="s-estado">carregando…</span>
+    </div>
+    <div id="lista-servidor"></div>
+  </div>
+
+  <div class="card">
+    <h2>Microfone (como o app o usa)</h2>
+    <div class="linha"><select id="sel-mic" style="min-width:260px"></select><button id="b-mic">Ligar</button></div>
+    <div class="linha">
+      <label class="chk"><input type="checkbox" id="c-eco" checked> cancelar eco</label>
+      <label class="chk"><input type="checkbox" id="c-ruido" checked> reduzir ruído</label>
+      <label class="chk"><input type="checkbox" id="c-agc" checked> ganho automático</label>
+    </div>
+    <div class="linha"><div class="barra"><i id="nivel"></i></div><span id="nivel-db" class="mini">— dBFS</span></div>
+    <div class="mini" id="mic-info">Ligue e fale: a barra tem que mexer. Ruído de fundo ideal: abaixo de −55 dBFS.</div>
+  </div>
+
+  <div class="card">
+    <h2>Alto-falantes</h2>
+    <div class="linha"><button id="b-som">Tocar um bipe</button><span class="mini" id="som-info">Você deve ouvir um tom curto.</span></div>
+    <div class="mini" id="audio-ctx"></div>
+  </div>
+
+  <div class="card">
+    <h2>Câmera</h2>
+    <div class="linha"><select id="sel-cam" style="min-width:260px"></select><button id="b-cam">Ligar a prévia</button></div>
+    <video id="video" autoplay muted playsinline></video>
+    <div class="mini" id="cam-info"></div>
+  </div>
+
+  <div class="card">
+    <h2>Reconhecimento de voz próprio</h2>
+    <div class="linha"><button id="b-stt">Testar ao vivo</button><span class="mini" id="stt-info">Liga o microfone e mostra o que o Jarvis entende (nada é enviado ao modelo de IA).</span></div>
+    <div class="caixa" id="stt-texto">—</div>
+    <div class="mini" id="stt-meta"></div>
+  </div>
+
+  <div class="card larga">
+    <h2>Gestos pela câmera (teste ao vivo)</h2>
+    <div class="linha"><button id="b-gestos">Ligar os gestos</button><span class="mini" id="g-info">Os pontos da mão e do rosto são achados por um modelo que roda neste computador; as regras dos gestos são do Jarvis. Nada é gravado nem enviado.</span></div>
+    <div style="display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start">
+      <canvas id="g-tela" width="480" height="360" style="width:480px; max-width:100%; border-radius:10px; background:#000; border:1px solid var(--linha)"></canvas>
+      <div style="flex:1; min-width:300px">
+        <div class="caixa" id="g-vivo" style="font-family:Consolas,monospace; font-size:13px; white-space:pre">—</div>
+        <div class="mini" style="margin:10px 0 4px">Gestos detectados (os mais novos em cima)</div>
+        <div class="caixa" id="g-log" style="font-family:Consolas,monospace; font-size:13px; max-height:190px; overflow:auto; white-space:pre-line">—</div>
+        <div class="mini" style="margin-top:10px">Como testar: <b>palma aberta parada</b> (0,7 s) · <b>deslizar</b> a mão aberta para os lados ou para cima/baixo · <b>pinça</b> (polegar e indicador) · <b>punho</b> segurado · <b>balançar a cabeça</b> sim/não. Se algum gesto falhar ou disparar à toa, me conte qual e o que a coluna "pinça / dedos" mostrou.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Navegador e placa gráfica</h2>
+    <div id="lista-navegador"></div>
+  </div>
+</div>
+
+<script src="/static/stt-local.js"></script>
+<script src="/static/gestos-regras.js"></script>
+<script src="/static/gestos.js"></script>
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const ROT = { ok: 'OK', aviso: 'AVISO', erro: 'ERRO', info: 'INFO' };
+
+function pintar(el, itens) {
+  el.innerHTML = '';
+  for (const r of itens) {
+    const d = document.createElement('div'); d.className = 'item';
+    d.innerHTML = `<span class="tag ${r.estado}">${ROT[r.estado] || r.estado}</span><div><b></b><span class="detalhe"></span><div class="dica"></div></div>`;
+    d.querySelector('b').textContent = r.titulo;
+    d.querySelector('.detalhe').textContent = r.detalhe ? ' — ' + r.detalhe : '';
+    d.querySelector('.dica').textContent = r.dica || '';
+    el.appendChild(d);
+  }
+}
+
+async function servidor(params = '') {
+  $('s-estado').textContent = 'verificando…';
+  try {
+    const r = await (await fetch('/api/diagnostico' + params)).json();
+    pintar($('lista-servidor'), r.resultados);
+    const n = (e) => r.resultados.filter((x) => x.estado === e).length;
+    $('s-estado').textContent = `${n('ok')} ok · ${n('aviso')} avisos · ${n('erro')} erros`;
+  } catch (e) { $('s-estado').textContent = 'o servidor não respondeu'; }
+}
+$('b-servidor').onclick = () => servidor();
+$('b-mic-servidor').onclick = () => { $('s-estado').textContent = 'FALE agora por 3 segundos…'; servidor('?mic=1'); };
+$('b-chaves').onclick = () => servidor('?chaves=1');
+$('b-rede').onclick = () => servidor('?rede=1');
+
+// ---------------------------------------------------------------- navegador, GPU, áudio
+(function navegadorInfo() {
+  const itens = [];
+  let gpu = 'sem WebGL';
+  try { const g = document.createElement('canvas').getContext('webgl'); const e = g.getExtension('WEBGL_debug_renderer_info'); gpu = e ? g.getParameter(e.UNMASKED_RENDERER_WEBGL) : 'sem informação'; } catch (_) {}
+  const naCasca = /Electron/.test(navigator.userAgent);
+  itens.push({ estado: 'info', titulo: naCasca ? 'Rodando no app do Jarvis (Electron)' : 'Rodando num navegador', detalhe: navigator.userAgent.split(') ').slice(-1)[0], dica: '' });
+  itens.push({ estado: /sem WebGL/.test(gpu) ? 'erro' : 'ok', titulo: 'Placa que desenha a interface (WebGL)', detalhe: gpu,
+    dica: /NVIDIA/.test(gpu) ? 'A interface está usando a NVIDIA: gasta bateria e disputa a placa com a voz. O app usa a integrada por padrão.' : '' });
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  itens.push({ estado: 'info', titulo: 'Reconhecimento de voz do navegador (Web Speech)', detalhe: SR ? 'existe' : 'não existe',
+    dica: naCasca ? 'No app Electron ele NÃO funciona (erro de rede); por isso o Jarvis usa a voz própria.' : 'Funciona no Chrome/Edge, mas o fim da fala é decidido por eles.' });
+  itens.push({ estado: navigator.mediaDevices ? 'ok' : 'erro', titulo: 'Acesso a microfone/câmera (getUserMedia)', detalhe: navigator.mediaDevices ? 'disponível' : 'indisponível', dica: '' });
+  itens.push({ estado: 'info', titulo: 'Tela', detalhe: `${screen.width}x${screen.height}, escala ${devicePixelRatio}`, dica: '' });
+  pintar($('lista-navegador'), itens);
+  try { const c = new AudioContext(); $('audio-ctx').textContent = `AudioContext: ${c.sampleRate} Hz, latência de saída ~${Math.round((c.outputLatency || c.baseLatency || 0) * 1000)} ms`; c.close(); } catch (_) {}
+})();
+
+$('b-som').onclick = async () => {
+  const c = new AudioContext(); await c.resume();
+  const o = c.createOscillator(), g = c.createGain();
+  o.frequency.value = 523; g.gain.value = 0.12; o.connect(g); g.connect(c.destination); o.start();
+  setTimeout(() => { o.stop(); c.close(); }, 700);
+  $('som-info').textContent = 'Tocando… se não ouviu, confira o volume e a saída padrão do Windows.';
+};
+
+// ---------------------------------------------------------------- microfone
+let fluxoMic = null, ctxMic = null, raf = 0;
+async function listarDispositivos() {
+  try { (await navigator.mediaDevices.getUserMedia({ audio: true, video: false })).getTracks().forEach((t) => t.stop()); } catch (e) { $('mic-info').textContent = 'Microfone bloqueado: ' + (e.name || e); }
+  const ds = await navigator.mediaDevices.enumerateDevices();
+  const preencher = (sel, tipo) => { sel.innerHTML = ''; ds.filter((d) => d.kind === tipo).forEach((d) => { const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || d.kind; sel.appendChild(o); }); };
+  preencher($('sel-mic'), 'audioinput'); preencher($('sel-cam'), 'videoinput');
+  if (!$('sel-cam').options.length) $('cam-info').textContent = 'Nenhuma câmera encontrada.';
+}
+listarDispositivos();
+
+$('b-mic').onclick = async () => {
+  if (fluxoMic) { fluxoMic.getTracks().forEach((t) => t.stop()); fluxoMic = null; cancelAnimationFrame(raf); ctxMic && ctxMic.close(); $('b-mic').textContent = 'Ligar'; $('nivel').style.width = '0'; return; }
+  try {
+    fluxoMic = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: $('sel-mic').value ? { exact: $('sel-mic').value } : undefined,
+      echoCancellation: $('c-eco').checked, noiseSuppression: $('c-ruido').checked, autoGainControl: $('c-agc').checked } });
+  } catch (e) { $('mic-info').textContent = 'Não consegui abrir: ' + (e.name || e); return; }
+  ctxMic = new AudioContext(); const an = ctxMic.createAnalyser(); an.fftSize = 1024;
+  ctxMic.createMediaStreamSource(fluxoMic).connect(an);
+  const buf = new Float32Array(an.fftSize); let piso = 0, n = 0, pico = -120;
+  $('b-mic').textContent = 'Desligar';
+  const laco = () => {
+    an.getFloatTimeDomainData(buf);
+    let s = 0; for (const v of buf) s += v * v;
+    const db = 20 * Math.log10(Math.sqrt(s / buf.length) + 1e-7);
+    $('nivel').style.width = Math.max(0, Math.min(100, (db + 80) / 80 * 100)) + '%';
+    $('nivel-db').textContent = db.toFixed(0) + ' dBFS';
+    n++; if (n < 40) piso = Math.max(piso, 0); pico = Math.max(pico, db);
+    $('mic-info').textContent = `Pico até agora: ${pico.toFixed(0)} dBFS. Fale normalmente: o pico deve passar de −35 dBFS e o silêncio ficar abaixo de −55.`;
+    raf = requestAnimationFrame(laco);
+  };
+  laco();
+};
+
+// ---------------------------------------------------------------- câmera
+let fluxoCam = null;
+$('b-cam').onclick = async () => {
+  if (fluxoCam) { fluxoCam.getTracks().forEach((t) => t.stop()); fluxoCam = null; $('video').srcObject = null; $('b-cam').textContent = 'Ligar a prévia'; return; }
+  try {
+    fluxoCam = await navigator.mediaDevices.getUserMedia({ video: { deviceId: $('sel-cam').value ? { exact: $('sel-cam').value } : undefined, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    $('video').srcObject = fluxoCam; $('b-cam').textContent = 'Desligar';
+    const t = fluxoCam.getVideoTracks()[0].getSettings();
+    $('cam-info').textContent = `${t.width}x${t.height} a ${Math.round(t.frameRate || 0)} fps. Se a imagem não aparece, outro programa pode estar usando a câmera.`;
+  } catch (e) { $('cam-info').textContent = 'Não consegui abrir a câmera: ' + (e.name || e) + '. Confira a permissão e se outro programa a usa.'; }
+};
+
+// ---------------------------------------------------------------- reconhecimento de voz próprio, ao vivo
+let wsStt = null;
+$('b-stt').onclick = async () => {
+  if (wsStt) { SttLocal.ligar(false); wsStt.send(JSON.stringify({ tipo: 'stt', ligar: false })); wsStt.close(); wsStt = null; $('b-stt').textContent = 'Testar ao vivo'; return; }
+  $('stt-texto').textContent = 'conectando…';
+  wsStt = new WebSocket(`ws://${location.host}/ws`);
+  wsStt.binaryType = 'arraybuffer';
+  wsStt.onopen = async () => {
+    try { await SttLocal.iniciar((b) => { if (wsStt && wsStt.readyState === 1) wsStt.send(b); }); } catch (e) { $('stt-texto').textContent = 'Microfone indisponível: ' + (e.name || e); return; }
+    wsStt.send(JSON.stringify({ tipo: 'stt', ligar: true }));
+    $('b-stt').textContent = 'Parar';
+  };
+  wsStt.onmessage = (ev) => {
+    if (typeof ev.data !== 'string') return;
+    const m = JSON.parse(ev.data);
+    if (m.tipo === 'stt_estado') {
+      if (m.estado === 'pronto') { SttLocal.ligar(true); $('stt-texto').textContent = 'Pronto. Fale uma frase…'; $('stt-meta').textContent = `Motor: ${m.modelo} em ${m.dispositivo}`; }
+      else if (m.estado === 'carregando') $('stt-texto').textContent = 'Carregando o modelo…';
+      else $('stt-texto').textContent = 'Indisponível: ' + (m.motivo || m.estado);
+    } else if (m.tipo === 'vad') { if (m.fala) $('stt-texto').textContent = '… ouvindo …'; }
+    else if (m.tipo === 'transcricao') {
+      $('stt-texto').textContent = m.texto;
+      $('stt-meta').textContent = `áudio de ${(m.duracao_ms / 1000).toFixed(1)} s · transcrito em ${m.transcricao_ms} ms · confiança ${m.confianca} · nível ${m.nivel_db} dBFS`;
+    }
+  };
+  wsStt.onclose = () => { SttLocal.ligar(false); };
+};
+
+servidor();
+</script>
+
+<script>
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const tela = $('g-tela'), g = tela.getContext('2d');
+  const LIGACOES_MAO = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+  const log = [];
+  let desenhando = 0;
+  function registrar(ev) {
+    if (ev.tipo === 'arrastar') return;
+    const h = new Date().toLocaleTimeString('pt-BR');
+    log.unshift(h + '  ' + ev.tipo);
+    log.length = Math.min(log.length, 14);
+    $('g-log').textContent = log.join('\n');
+  }
+  function desenhar() {
+    desenhando = requestAnimationFrame(desenhar);
+    const v = Gestos.video(), u = Gestos.ultimo(), e = Gestos.estado();
+    g.fillStyle = '#000'; g.fillRect(0, 0, tela.width, tela.height);
+    if (v && v.readyState >= 2) { g.save(); g.translate(tela.width, 0); g.scale(-1, 1); g.drawImage(v, 0, 0, tela.width, tela.height); g.restore(); }
+    const P = (p) => [p.x * tela.width, p.y * tela.height];
+    if (u.mao) {
+      g.strokeStyle = '#4fd8ff'; g.lineWidth = 2;
+      for (const [a, b] of LIGACOES_MAO) { const A = P(u.mao[a]), B = P(u.mao[b]); g.beginPath(); g.moveTo(A[0], A[1]); g.lineTo(B[0], B[1]); g.stroke(); }
+      g.fillStyle = '#fff'; for (const p of u.mao) { const [x, y] = P(p); g.beginPath(); g.arc(x, y, 3, 0, 7); g.fill(); }
+    }
+    if (u.rosto) { g.fillStyle = 'rgba(125,255,189,.55)'; for (const i of [1, 10, 152, 234, 454, 33, 263, 61, 291]) { const [x, y] = P(u.rosto[i]); g.beginPath(); g.arc(x, y, 3, 0, 7); g.fill(); } }
+    const me = u.mao_estado, md = u.medidas;
+    $('g-vivo').textContent =
+      'câmera/gestos : ' + (e.ligado ? 'LIGADO' : e.carregando ? 'carregando...' : 'desligado') + (e.erro ? '  (' + e.erro + ')' : '') + '\n' +
+      'quadros/s     : ' + e.fps + '   (mão ' + (e.ms_mao ?? '-') + ' ms · rosto ' + (e.ms_rosto ?? '-') + ' ms · ' + (e.delegate || '-') + ')\n' +
+      'mão           : ' + (me ? 'vista · pinça ' + me.pinca + ' (fecha < 0,22) · dedos ' + me.dedos + (me.fechada ? ' · PINÇA FECHADA' : '') : 'não vista') + '\n' +
+      'cabeça        : ' + (md ? 'vista · inclinação ' + md.pitch.toFixed(3) + ' · giro ' + md.yaw.toFixed(3) : 'não vista');
+  }
+  Gestos.ao('gesto', registrar);
+  Gestos.ao('estado', (e) => { $('b-gestos').textContent = e.ligado ? 'Desligar os gestos' : e.carregando ? 'Carregando...' : 'Ligar os gestos'; $('b-gestos').disabled = !!e.carregando; });
+  $('b-gestos').addEventListener('click', async () => {
+    if (Gestos.estado().ligado) { Gestos.desligar(); cancelAnimationFrame(desenhando); desenhando = 0; return; }
+    await Gestos.ligar();
+    if (Gestos.estado().ligado && !desenhando) desenhar();
+  });
+})();
+</script>
+</body>
+</html>

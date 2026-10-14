@@ -1,0 +1,133 @@
+/* Visual MODERNO dos painéis (padrão): vidro fosco neutro, cantos redondos, tipografia limpa, sem grade nem linhas de varredura.
+   O reator do centro não muda. "Clássico" (estilo matrix) volta pelo menu de layout (botão no topo ou tecla B). */
+
+body.moderno { --painel-vidro: rgba(22, 28, 40, .52); --borda-vidro: rgba(255, 255, 255, .085); --texto-suave: rgba(214, 226, 238, .58); --fonte: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; }
+body.moderno .grade, body.moderno .linhas-scan, body.moderno #fluxos { display: none; }
+body.moderno .vinheta { background: radial-gradient(ellipse at center, transparent 62%, rgba(0, 0, 0, .5) 100%); }
+
+/* sem inclinação 3D nas laterais: a perspectiva atrapalhava o clique e dava cara de "tela de hacker" */
+body.moderno #hud, body.ui3d.moderno #hud { perspective: none; transform-style: flat; }
+body.ui3d.moderno .coluna, body.ui3d.moderno .coluna.esq, body.ui3d.moderno .coluna.dir { transform: none; transform-style: flat; overflow: visible; gap: 14px; }
+body.ui3d.moderno .topo, body.ui3d.moderno .rodape { transform: none; }
+body.moderno .coluna { padding-top: 4px; }
+
+/* cartões */
+body.moderno .painel, body.ui3d.moderno .painel {
+    clip-path: none; border-radius: 22px; padding: 18px 20px 18px;
+    background: linear-gradient(165deg, rgba(255, 255, 255, .075), rgba(255, 255, 255, .02)), var(--painel-vidro);
+    border: 1px solid var(--borda-vidro);
+    backdrop-filter: blur(26px) saturate(1.5);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, .34), inset 0 1px 0 rgba(255, 255, 255, .07);
+    transform: none; transition: transform .25s cubic-bezier(.2, .8, .2, 1), box-shadow .25s, border-color .25s, opacity .4s;
+}
+body.moderno .painel::before, body.moderno .painel::after { display: none; }
+body.ui3d.moderno .painel:hover { transform: translateY(-2px); border-color: rgba(255, 255, 255, .16); box-shadow: 0 24px 60px rgba(0, 0, 0, .42), inset 0 1px 0 rgba(255, 255, 255, .1); }
+body.moderno .painel h2 {
+    font-size: 12.5px; font-weight: 600; letter-spacing: .02em; text-transform: none; color: var(--texto-suave); margin-bottom: 12px; gap: 0;
+}
+body.moderno .painel h2::before, body.moderno .painel h2::after { display: none; }
+body.moderno .painel.pulsando, body.ui3d.moderno .painel.pulsando { border-color: rgba(var(--rgb), .55); box-shadow: 0 18px 50px rgba(0, 0, 0, .34), 0 0 0 1px rgba(var(--rgb), .25), 0 0 34px rgba(var(--rgb), .16); }
+body.ui3d.moderno .painel.em-foco { transform: scale(1.015); border-color: rgba(var(--rgb), .6); box-shadow: 0 24px 64px rgba(0, 0, 0, .45), 0 0 40px rgba(var(--rgb), .2); }
+body.ui3d.moderno .esq .painel.em-foco, body.ui3d.moderno .dir .painel.em-foco { transform: scale(1.015); }
+body.ui3d.moderno .painel.arrastando { transform: scale(1.03); box-shadow: 0 34px 80px rgba(0, 0, 0, .55); border-color: rgba(var(--rgb), .55); }
+body.ui3d.moderno .coluna.tem-foco .painel:not(.em-foco) { opacity: .6; }
+
+/* topo */
+body.moderno .marca-nome { font-size: clamp(20px, 2.6vmin, 30px); font-weight: 600; letter-spacing: .34em; color: #fff; text-shadow: none; }
+body.moderno .marca-sub { display: none; }
+body.moderno .status-pill { background: rgba(255, 255, 255, .06); border: 1px solid var(--borda-vidro); letter-spacing: .18em; font-size: 11px; color: rgba(255, 255, 255, .82); backdrop-filter: blur(14px); }
+body.moderno .status-pill i { box-shadow: none; }
+body.moderno #hora { font-family: var(--fonte); font-weight: 300; font-size: clamp(26px, 3.6vmin, 44px); color: #fff; letter-spacing: .02em; text-shadow: none; }
+body.moderno #data { font-size: 12px; letter-spacing: .06em; text-transform: none; color: var(--texto-suave); }
+.btn-icone { width: 38px; height: 38px; border-radius: 12px; border: 1px solid var(--borda-vidro, rgba(255, 255, 255, .1)); background: rgba(255, 255, 255, .06); color: #fff; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: background .2s, border-color .2s; }
+.btn-icone:hover { background: rgba(255, 255, 255, .13); border-color: rgba(255, 255, 255, .25); }
+.btn-icone svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+/* clima */
+body.moderno .clima { gap: 18px; }
+body.moderno .clima-temp { font-family: var(--fonte); font-weight: 200; font-size: clamp(44px, 6.4vmin, 76px); text-shadow: none; letter-spacing: -.02em; }
+body.moderno .clima-info { font-size: 15px; gap: 3px; }
+body.moderno .clima-info small { font-size: 12px; letter-spacing: 0; color: var(--texto-suave); }
+body.moderno .radar-caixa { display: none; }
+
+/* números e medidores */
+body.moderno .metrica { grid-template-columns: 3.2em 3.6em 1fr; gap: 10px; margin-bottom: 8px; }
+body.moderno .metrica label, body.moderno .medidor label { font-size: 11.5px; letter-spacing: .04em; color: var(--texto-suave); }
+body.moderno .metrica b { font-family: var(--fonte); font-weight: 600; font-size: 14px; text-shadow: none; color: #fff; }
+body.moderno .nucleos { display: none; }
+body.moderno .spark { height: 28px; opacity: .85; }
+body.moderno .medidor { gap: 10px; margin-bottom: 10px; }
+body.moderno .medidor em { font-family: var(--fonte); font-size: 12.5px; color: #fff; }
+body.moderno .barra { height: 6px; border: 0; border-radius: 6px; background: rgba(255, 255, 255, .09); }
+body.moderno .barra b { border-radius: 6px; background: linear-gradient(90deg, rgba(var(--rgb), .55), var(--c1)); box-shadow: none; }
+body.moderno .barra b.alto { background: linear-gradient(90deg, #ffb703, #ff8a3d); box-shadow: none; }
+body.moderno .sub-info { font-size: 11.5px; letter-spacing: 0; color: var(--texto-suave); }
+body.moderno .sub-info i { font-family: var(--fonte); color: #fff; }
+body.moderno .info { font-size: 13px; gap: 8px 14px; }
+body.moderno .info dt { letter-spacing: .02em; text-transform: none; font-size: 12px; color: var(--texto-suave); }
+body.moderno .info dd { font-family: var(--fonte); color: #fff; }
+body.moderno #lista-procs li { font-size: 12.5px; }
+body.moderno #lista-procs .mini { height: 4px; border-radius: 4px; background: rgba(255, 255, 255, .09); }
+body.moderno #lista-procs .mini b { box-shadow: none; border-radius: 4px; }
+body.moderno #lista-procs .val { font-family: var(--fonte); color: var(--texto-suave); }
+
+/* cérebro, agenda, atividade */
+body.moderno .mem-resumo b, body.moderno .agenda-topo b { font-family: var(--fonte); font-weight: 300; font-size: clamp(30px, 4.2vmin, 48px); text-shadow: none; }
+body.moderno .mem-resumo small, body.moderno .agenda-topo small { font-size: 12px; letter-spacing: 0; text-transform: none; color: var(--texto-suave); }
+body.moderno #mem-ver { font-size: 11.5px; letter-spacing: .04em; border-bottom: 0; color: var(--c1); padding: 4px 0; }
+body.moderno #ag-lista li:not(.vazio), body.moderno #mem-recentes li { font-size: 13px; line-height: 1.35; padding-left: 0; }
+body.moderno #ag-lista li:not(.vazio)::before, body.moderno #mem-recentes li:not(.vazio)::before { display: none; }
+body.moderno #ag-lista i { font-family: var(--fonte); color: var(--texto-suave); font-size: .86em; }
+body.moderno #atividade { gap: 10px; }
+body.moderno #atividade li { font-size: 13px; }
+body.moderno #atividade .tag { font-size: 10px; letter-spacing: .08em; padding: 3px 9px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, .09); color: #fff; }
+body.moderno #atividade .ponto { box-shadow: none; }
+body.moderno .vazio { font-size: 13px; color: var(--texto-suave); }
+
+/* atalhos (clicáveis) */
+.atalhos-grade { display: flex; flex-wrap: wrap; gap: 8px; }
+.atalho { border: 1px solid var(--borda-vidro, rgba(255, 255, 255, .1)); background: rgba(255, 255, 255, .06); color: #fff; padding: 9px 14px; border-radius: 999px; font: 500 13px var(--fonte); cursor: pointer; transition: background .2s, transform .15s, border-color .2s; }
+.atalho:hover { background: rgba(var(--rgb), .2); border-color: rgba(var(--rgb), .55); transform: translateY(-1px); }
+.atalho:active { transform: scale(.97); }
+.atalho.sec { color: var(--texto-suave, rgba(255, 255, 255, .6)); }
+
+/* rodapé: legenda e campo de comando */
+body.moderno .osc-caixa, body.ui3d.moderno #form-comando { background: rgba(255, 255, 255, .05); border: 1px solid var(--borda-vidro); border-radius: 16px; backdrop-filter: blur(18px); }
+body.moderno #form-comando { opacity: .85; padding: 8px 16px; border-bottom: 1px solid var(--borda-vidro); }
+body.moderno #form-comando span { font-family: var(--fonte); color: var(--c1); }
+body.moderno .atalhos { font-size: 11px; letter-spacing: .02em; text-transform: none; color: rgba(214, 226, 238, .32); }
+body.moderno #legenda-voce:not(:empty)::before { letter-spacing: .1em; }
+body.moderno #legenda-jarvis { text-shadow: 0 2px 22px rgba(0, 0, 0, .6); }
+body.moderno #ticker { opacity: .6; }
+
+/* menu de layout */
+#menu-layout { position: fixed; top: 64px; right: 24px; z-index: 30; width: 296px; padding: 16px; border-radius: 20px; background: rgba(20, 26, 38, .88); border: 1px solid rgba(255, 255, 255, .12);
+    backdrop-filter: blur(30px) saturate(1.5); box-shadow: 0 30px 80px rgba(0, 0, 0, .6); color: #fff; font: 13px var(--fonte); animation: menu-entra .22s cubic-bezier(.2, .9, .2, 1) both; }
+#menu-layout[hidden] { display: none; }
+@keyframes menu-entra { from { opacity: 0; transform: translateY(-8px) scale(.97); } }
+#menu-layout h4 { margin: 12px 0 8px; font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: rgba(255, 255, 255, .45); }
+#menu-layout h4:first-child { margin-top: 0; }
+.ml-linha { display: flex; flex-wrap: wrap; gap: 6px; }
+.ml-botao { flex: 1 1 auto; border: 1px solid rgba(255, 255, 255, .12); background: rgba(255, 255, 255, .06); color: #fff; padding: 8px 10px; border-radius: 12px; font: 500 12.5px var(--fonte); cursor: pointer; transition: background .15s, border-color .15s; }
+.ml-botao:hover { background: rgba(255, 255, 255, .13); }
+.ml-botao.on { background: rgba(var(--rgb), .25); border-color: rgba(var(--rgb), .7); }
+.ml-chave { display: flex; align-items: center; justify-content: space-between; padding: 6px 2px; cursor: pointer; }
+.ml-chave i { width: 34px; height: 20px; border-radius: 20px; background: rgba(255, 255, 255, .16); position: relative; transition: background .2s; flex: none; }
+.ml-chave i::after { content: ""; position: absolute; left: 2px; top: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .2s; }
+.ml-chave.on i { background: rgba(var(--rgb), .8); } .ml-chave.on i::after { transform: translateX(14px); }
+.ml-dica { margin-top: 10px; font-size: 11.5px; color: rgba(255, 255, 255, .4); }
+
+/* modo foco: só o centro, com uma folga elegante */
+body.moderno.sem-esq.sem-dir #hud { grid-template-columns: 0 minmax(0, 1fr) 0; }
+@media (prefers-reduced-motion: reduce) { #menu-layout { animation: none; } }
+
+/* entrada suave dos cartões (substitui a entrada em profundidade do 3D) */
+body.ui3d-ok.moderno .painel { animation: entra-moderna .75s cubic-bezier(.2, .9, .2, 1) both; animation-delay: calc(var(--i) * .09s + 2.2s); }
+@keyframes entra-moderna { from { opacity: 0; transform: translateY(18px) scale(.985); filter: blur(4px); } to { opacity: 1; filter: blur(0); } }
+
+body.moderno .painel { flex-shrink: 0; }
+.atalho { padding: 8px 13px; font-size: 12.5px; }
+body.moderno .ac-chip { font-family: var(--fonte); font-size: 12px; letter-spacing: .03em; background: rgba(20, 26, 38, .72); border-color: rgba(255, 255, 255, .16); box-shadow: 0 10px 30px rgba(0, 0, 0, .35); }
+body.moderno .ac-chip b { letter-spacing: .1em; }
+body.moderno .pill-gestos { font-family: var(--fonte); letter-spacing: .1em; background: rgba(255, 255, 255, .06); border-color: var(--borda-vidro); }
+body.moderno .ac-cartao, body.moderno .ac-barra span, body.moderno .ac-corpo { font-family: var(--fonte); }

@@ -1,0 +1,69 @@
+{
+  "name": "jarvis-desktop",
+  "productName": "Jarvis",
+  "version": "0.2.0",
+  "description": "Jarvis: assistente de voz para Windows (casca Electron + servidor Python local).",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "teste": "electron . --teste",
+    "dist": "electron-builder --win --publish never"
+  },
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "electron": "^44.7.1",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "app.jarvis.desktop",
+    "productName": "Jarvis",
+    "copyright": "Lucas",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "preload-flutuante.js",
+      "flutuante.html",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../dist-server/jarvis-server",
+        "to": "server"
+      },
+      {
+        "from": "../icone.ico",
+        "to": "icone.ico"
+      },
+      {
+        "from": "atualizacao.json",
+        "to": "atualizacao.json"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "../icone.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    },
+    "artifactName": "JarvisSetup-${version}.exe",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "lucas-hsi",
+        "repo": "jarvis3d",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
+}

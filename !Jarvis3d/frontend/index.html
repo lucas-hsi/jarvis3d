@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; connect-src 'self' ws://127.0.0.1:* ws://localhost:*; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+    <title>J.A.R.V.I.S.</title>
+    <link rel="icon" type="image/png" href="/static/icone.png">
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/tema3d.css">
+    <link rel="stylesheet" href="/static/acoes.css">
+    <link rel="stylesheet" href="/static/moderno.css">
+    <script type="importmap">{"imports":{"three":"/static/vendor/three/three.module.js","three/addons/":"/static/vendor/three/addons/"}}</script>
+</head>
+<body data-estado="offline" data-tema="ciano" class="boot">
+    <canvas id="cena3d"></canvas>
+    <div class="grade"></div>
+    <canvas id="fluxos"></canvas>
+    <div class="vinheta"></div>
+    <div class="linhas-scan"></div>
+
+    <main id="hud">
+        <header class="topo">
+            <div class="marca">
+                <span class="marca-nome">J.A.R.V.I.S</span>
+                <span class="marca-sub">SISTEMA PESSOAL &nbsp;·&nbsp; <span id="usuario">LUCAS</span></span>
+            </div>
+            <div class="status-pill"><i></i><span id="pill-texto">SEM CONEXÃO</span></div>
+            <button id="pill-gestos" class="pill-gestos" type="button" title="Gestos por câmera (tecla G). A câmera só fica ligada enquanto isto estiver aceso."><i></i><span>GESTOS</span></button>
+            <button id="btn-layout" class="btn-icone" type="button" title="Layout e painéis (tecla B para só o centro)" aria-label="Layout"><svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="3.5"/><path d="M9.5 4v16M14.5 4v16"/></svg></button>
+            <div class="relogio">
+                <span id="hora">--:--</span>
+                <span id="data">--</span>
+            </div>
+        </header>
+
+        <section class="coluna esq">
+            <article class="painel" id="p-atalhos" data-painel="atalhos" style="--i:0">
+                <h2>Atalhos</h2>
+                <div class="atalhos-grade" id="atalhos-grade"></div>
+            </article>
+
+            <article class="painel" id="p-clima" data-painel="clima" style="--i:0">
+                <h2>Clima &amp; localização</h2>
+                <div class="clima">
+                    <div class="clima-bloco">
+                        <span class="clima-temp" id="clima-temp">--°</span>
+                        <div class="clima-info">
+                            <span id="clima-desc">Sem dados</span>
+                            <small id="clima-extra">&nbsp;</small>
+                        </div>
+                    </div>
+                    <div class="radar-caixa">
+                        <canvas id="radar"></canvas>
+                        <small id="radar-legenda">--</small>
+                    </div>
+                </div>
+            </article>
+
+            <article class="painel" id="p-sistema" data-painel="sistema" style="--i:1">
+                <h2>Sistema</h2>
+                <div class="metrica"><label>CPU</label><b id="v-cpu">--</b><canvas id="g-cpu" class="spark"></canvas></div>
+                <div class="nucleos" id="nucleos" title="uso de cada núcleo"></div>
+                <div class="metrica"><label>RAM</label><b id="v-ram">--</b><canvas id="g-ram" class="spark"></canvas></div>
+                <div class="medidor"><label>DISCO</label><div class="barra"><b id="b-disco"></b></div><em id="v-disco">--</em></div>
+                <div class="medidor" id="linha-bateria"><label>BATERIA</label><div class="barra"><b id="b-bat"></b></div><em id="v-bat">--</em></div>
+            </article>
+
+            <article class="painel" id="p-rede" data-painel="rede" style="--i:2">
+                <h2>Rede &amp; GPU</h2>
+                <div class="metrica dupla"><label>REDE</label><b id="v-rede">--</b><canvas id="g-rede" class="spark"></canvas></div>
+                <div class="sub-info"><span>↓ <i id="v-down">--</i></span><span>↑ <i id="v-up">--</i></span><span>PING <i id="v-ping">--</i></span><span>DISCO <i id="v-dio">--</i></span></div>
+                <div class="metrica"><label>GPU</label><b id="v-gpu">--</b><canvas id="g-gpu" class="spark"></canvas></div>
+                <div class="medidor"><label>VRAM</label><div class="barra"><b id="b-vram"></b></div><em id="v-vram">--</em></div>
+            </article>
+
+            <article class="painel" id="p-processos" data-painel="processos" style="--i:3">
+                <h2>Processos</h2>
+                <ul id="lista-procs"><li class="vazio">Medindo...</li></ul>
+            </article>
+        </section>
+
+        <section class="centro">
+            <div class="reator-caixa">
+                <canvas id="reator"></canvas>
+                <div class="reator-texto">
+                    <span id="rotulo-estado">SEM CONEXÃO</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="coluna dir">
+            <article class="painel painel-grafo" id="p-memoria" data-painel="memoria" style="--i:0">
+                <h2>Cérebro</h2>
+                <div class="mem-resumo"><b id="mem-total">0</b><small>memórias sobre você · <span id="mem-notas">0</span> notas no Obsidian</small>
+                    <a id="mem-ver" href="/memoria" target="_blank" rel="noopener">GERENCIAR</a></div>
+                <div class="grafo-caixa"><canvas id="grafo"></canvas><div id="grafo-dica"></div></div>
+            </article>
+
+            <article class="painel" id="p-agenda" data-painel="agenda" style="--i:1">
+                <h2>Agenda &amp; e-mail</h2>
+                <div class="agenda-topo"><b id="ag-naolidos">--</b><small id="ag-legenda">E-mails não lidos</small></div>
+                <ul id="ag-lista"><li class="vazio">Google não conectado.</li></ul>
+            </article>
+
+            <article class="painel painel-atividade" id="p-atividade" data-painel="atividade" style="--i:1">
+                <h2>Atividade</h2>
+                <ul id="atividade"><li class="vazio">Sem atividade ainda.</li></ul>
+            </article>
+
+            <article class="painel" id="p-nucleo" data-painel="nucleo" style="--i:2">
+                <h2>Núcleo</h2>
+                <dl class="info">
+                    <dt>Modelo</dt><dd id="i-modelo">--</dd>
+                    <dt>Voz</dt><dd id="i-voz">--</dd>
+                    <dt>Conexão</dt><dd id="i-conexao">--</dd>
+                    <dt>No ar há</dt><dd id="i-uptime">--</dd>
+                </dl>
+            </article>
+
+            <article class="painel painel-fluxo" id="p-fluxo" data-painel="fluxo" style="--i:3">
+                <h2>Fluxo de dados</h2>
+                <canvas id="hex"></canvas>
+            </article>
+        </section>
+
+        <footer class="rodape">
+            <div class="osc-caixa" data-painel="osciloscopio"><canvas id="osc"></canvas></div>
+            <div class="legenda">
+                <div id="legenda-voce"></div>
+                <div id="legenda-jarvis"></div>
+            </div>
+            <form id="form-comando" autocomplete="off">
+                <span>&gt;</span>
+                <input id="comando" type="text" placeholder="digite um comando  ( / )" maxlength="500" spellcheck="false">
+            </form>
+            <div class="atalhos">ESPAÇO / CLIQUE interrompe &nbsp;·&nbsp; M silencia o microfone &nbsp;·&nbsp; F tela cheia</div>
+            <div id="ticker" data-painel="manchetes"><div class="ticker-trilho" id="ticker-trilho"></div></div>
+        </footer>
+    </main>
+
+    <div id="faixa-controle"><i></i>CONTROLE ATIVO &nbsp;·&nbsp; ESC, ESPAÇO ou mouse no canto superior esquerdo param tudo</div>
+
+    <div id="confirmacao" hidden>
+        <div class="conf-caixa">
+            <div class="conf-selo">CONFIRMAÇÃO NECESSÁRIA</div>
+            <h3 id="conf-titulo"></h3>
+            <ul id="conf-detalhes"></ul>
+            <div class="conf-tempo"><b id="conf-barra"></b></div>
+            <div class="conf-botoes">
+                <button id="conf-nao" type="button">CANCELAR</button>
+                <button id="conf-sim" type="button">CONFIRMAR</button>
+            </div>
+            <p>ou diga <em>confirmo</em> / <em>cancela</em></p>
+        </div>
+    </div>
+
+    <div id="camera-pip" hidden>
+        <video id="camera-video" playsinline muted></video>
+        <div id="camera-contagem"></div>
+        <span class="camera-tag"><i></i>CÂMERA</span>
+    </div>
+    <div id="direcao" hidden>
+        <div class="dir-topo"><span><i></i>DIREÇÃO DE VÍDEO</span><button id="dir-parar" type="button">PARAR</button></div>
+        <div id="dir-estado">Ligando a câmera...</div>
+        <ul id="dir-notas"></ul>
+    </div>
+    <div id="flash-camera"></div>
+
+    <div id="toast-memoria"></div>
+
+    <div id="aviso" role="alert"></div>
+
+    <div id="inicio">
+        <div class="inicio-caixa">
+            <div class="inicio-titulo">J.A.R.V.I.S</div>
+            <p>Bata duas palmas ou clique para iniciar</p>
+            <button id="botao-iniciar" type="button">INICIAR</button>
+        </div>
+    </div>
+
+    <script src="/static/reator.js"></script>
+    <script src="/static/ponte3d.js"></script>
+    <script src="/static/sfx.js"></script>
+    <script src="/static/graficos.js"></script>
+    <script src="/static/grafo.js"></script>
+    <script src="/static/fluxos.js"></script>
+    <script src="/static/ui.js"></script>
+    <script src="/static/acoes.js"></script>
+    <script src="/static/moderno.js"></script>
+    <script src="/static/interrupcao.js"></script>
+    <script src="/static/stt-local.js"></script>
+    <script src="/static/gestos-regras.js"></script>
+    <script src="/static/gestos.js"></script>
+    <script src="/static/main.js"></script>
+</body>
+</html>

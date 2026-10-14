@@ -1,0 +1,1 @@
+Three.js r186.1 (MIT) — https://github.com/mrdoob/three.js — vendorizado em 2026-10-14; só os arquivos usados (núcleo + bloom).

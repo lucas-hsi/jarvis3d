@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jarvis · Primeira configuração</title>
+<style>
+  :root { --bg:#05080c; --card:#0b131b; --linha:#16303f; --ciano:#4fd8ff; --txt:#cfeaf5; --mudo:#7a9aa8; --ok:#3ddc97; --av:#ffc857; --er:#ff5d6c; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:15px/1.5 "Segoe UI", system-ui, sans-serif; padding:32px; max-width:860px; margin-inline:auto; }
+  h1 { font-size:22px; letter-spacing:.14em; color:var(--ciano); margin:0 0 4px; }
+  h2 { font-size:13px; letter-spacing:.14em; text-transform:uppercase; color:var(--ciano); margin:0 0 12px; }
+  p.sub { color:var(--mudo); margin:0 0 22px; }
+  .card { background:var(--card); border:1px solid var(--linha); border-radius:14px; padding:18px 22px; margin-bottom:16px; }
+  label { display:block; margin:12px 0 4px; font-size:13px; color:var(--mudo); }
+  input { width:100%; background:#08121a; color:var(--txt); border:1px solid #1f4a60; border-radius:8px; padding:9px 12px; font:inherit; }
+  input:focus { outline:none; border-color:var(--ciano); }
+  button { background:#0f2230; color:var(--txt); border:1px solid #1f4a60; border-radius:8px; padding:9px 16px; font:inherit; cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--ciano); } button:disabled { opacity:.5; cursor:default; }
+  button.principal { background:#0e3a50; border-color:var(--ciano); color:#fff; }
+  .linha { display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-top:12px; }
+  .tag { font:600 11px/1 "Segoe UI"; padding:5px 10px; border-radius:6px; }
+  .ok { background:#0f3a2a; color:var(--ok); } .aviso { background:#3b2f0d; color:var(--av); } .erro { background:#42151b; color:var(--er); } .info { background:#12303d; color:var(--ciano); }
+  .mini { font-size:12.5px; color:var(--mudo); }
+  .barra { height:12px; background:#0a1822; border:1px solid var(--linha); border-radius:7px; overflow:hidden; flex:1; min-width:220px; }
+  .barra > i { display:block; height:100%; width:0; background:linear-gradient(90deg,#1b8fb3,var(--ciano)); transition:width .4s; }
+  .item { display:flex; justify-content:space-between; align-items:center; gap:14px; padding:10px 0; border-bottom:1px dashed #112430; flex-wrap:wrap; }
+  .item:last-child { border-bottom:0; }
+  a { color:var(--ciano); }
+</style>
+</head>
+<body>
+<h1>BEM-VINDO AO JARVIS</h1>
+<p class="sub">Falta pouco. Suas chaves e preferências ficam só neste computador (na sua pasta de dados) e nunca são mostradas de volta nem enviadas a ninguém, a não ser aos próprios serviços (Anthropic e ElevenLabs) quando o Jarvis conversa.</p>
+
+<div class="card">
+  <h2>1 · Chaves e nome</h2>
+  <label for="k-anthropic">Chave da Anthropic <b>(obrigatória: é o cérebro do Jarvis)</b> — <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">onde conseguir</a></label>
+  <input id="k-anthropic" type="password" autocomplete="off" placeholder="sk-ant-..." spellcheck="false">
+  <label for="k-eleven">Chave da ElevenLabs <span class="mini">(opcional: voz natural; sem ela o Jarvis fala com a voz do Windows)</span></label>
+  <input id="k-eleven" type="password" autocomplete="off" placeholder="deixe em branco para pular" spellcheck="false">
+  <label for="k-voz">ID da voz da ElevenLabs <span class="mini">(opcional)</span></label>
+  <input id="k-voz" type="text" autocomplete="off" placeholder="ex.: JBFqnCBsd6RMkjVDRZzb" spellcheck="false">
+  <label for="k-nome">Como ele deve te chamar (nome)</label>
+  <input id="k-nome" type="text" autocomplete="off" placeholder="seu nome">
+  <label for="k-trat">Tratamento <span class="mini">(chefe, senhor, doutor...)</span></label>
+  <input id="k-trat" type="text" autocomplete="off" placeholder="chefe">
+  <div class="linha"><button id="b-salvar" class="principal">Salvar</button><span id="r-salvar" class="mini"></span></div>
+  <p class="mini" id="estado-chaves"></p>
+</div>
+
+<div class="card">
+  <h2>2 · Voz e memória (downloads de uma vez só)</h2>
+  <p class="mini" style="margin-top:0">O reconhecimento de voz roda no seu computador (nada do que você fala vai para a nuvem para ser transcrito). Estes arquivos não vêm dentro do instalador por serem grandes.</p>
+  <div class="item"><div><b>Reconhecimento de voz (Whisper)</b><div class="mini">~480 MB · necessário para falar com o Jarvis</div></div><div><span id="t-whisper" class="tag info">—</span> <button id="b-whisper">Baixar</button></div></div>
+  <div class="item"><div><b>Memória por significado</b><div class="mini">~220 MB · opcional (sem ela a busca é por palavras)</div></div><div><span id="t-embeddings" class="tag info">—</span> <button id="b-embeddings">Baixar</button></div></div>
+  <div class="item" id="linha-cuda"><div><b>Aceleração pela placa NVIDIA</b><div class="mini">~1,1 GB · opcional · deixa a voz bem mais rápida (sem ela usa o processador)</div></div><div><span id="t-cuda" class="tag info">—</span> <button id="b-cuda">Baixar</button></div></div>
+  <div class="linha"><div class="barra"><i id="prog"></i></div><span class="mini" id="prog-texto">nenhum download em andamento</span></div>
+</div>
+
+<div class="card">
+  <h2>3 · Testes e conclusão</h2>
+  <p class="mini" style="margin-top:0">Confira microfone, alto-falantes e câmera na <a href="/diagnostico" id="l-diag">página de diagnóstico</a> (depois volte aqui, ou feche).</p>
+  <div class="linha"><button id="b-reiniciar" class="principal">Concluir e reiniciar o Jarvis</button><span class="mini" id="r-reiniciar">O Jarvis reinicia em alguns segundos e abre a tela principal.</span></div>
+</div>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const post = (url, corpo) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo || {}) }).then((r) => r.json().catch(() => ({})));
+
+function etiqueta(el, ok, textoOk, textoNao, cor = 'aviso') { el.textContent = ok ? textoOk : textoNao; el.className = 'tag ' + (ok ? 'ok' : cor); }
+
+async function atualizar() {
+  let e;
+  try { e = await (await fetch('/api/configurar/estado')).json(); } catch (_) { return; }
+  etiqueta($('t-whisper'), e.whisper, 'instalado', 'falta', 'erro');
+  etiqueta($('t-embeddings'), e.embeddings, 'instalado', 'não instalado', 'info');
+  $('linha-cuda').style.display = e.nvidia ? '' : 'none';
+  etiqueta($('t-cuda'), e.cuda, 'instalado', 'não instalado', 'info');
+  const p = e.progresso || {}, ocupado = !!p.ocupado;
+  for (const b of ['whisper', 'embeddings', 'cuda']) $('b-' + b).disabled = ocupado || e[b];
+  $('prog').style.width = (p.pct || 0) + '%';
+  $('prog-texto').textContent = p.erro ? 'Falhou: ' + p.erro + ' (clique em Baixar para tentar de novo)' : ocupado ? (p.fase || '...') : (p.fase === 'pronto' ? 'pronto' : 'nenhum download em andamento');
+  $('estado-chaves').textContent = (e.tem_anthropic ? '✓ chave da Anthropic salva' : '✗ falta a chave da Anthropic') + ' · ' + (e.tem_eleven ? '✓ chave da ElevenLabs salva' : 'sem ElevenLabs (voz do Windows)');
+  if (e.nome && !$('k-nome').value) $('k-nome').value = e.nome;
+  if (e.tratamento && !$('k-trat').value) $('k-trat').value = e.tratamento;
+  if (e.voz_id && !$('k-voz').value) $('k-voz').value = e.voz_id;
+}
+setInterval(atualizar, 1500); atualizar();
+
+$('b-salvar').addEventListener('click', async () => {
+  const corpo = { nome: $('k-nome').value, tratamento: $('k-trat').value, elevenlabs_voice_id: $('k-voz').value };
+  if ($('k-anthropic').value.trim()) corpo.anthropic_api_key = $('k-anthropic').value.trim();
+  if ($('k-eleven').value.trim()) corpo.elevenlabs_api_key = $('k-eleven').value.trim();
+  const r = await post('/api/configurar/salvar', corpo);
+  $('r-salvar').textContent = r.ok ? 'Salvo. Os campos de chave foram esvaziados por segurança.' : ('Não salvou: ' + (r.erro || 'erro'));
+  if (r.ok) { $('k-anthropic').value = ''; $('k-eleven').value = ''; atualizar(); }
+});
+for (const item of ['whisper', 'embeddings', 'cuda']) $('b-' + item).addEventListener('click', async () => { await post('/api/configurar/baixar', { item }); atualizar(); });
+$('b-reiniciar').addEventListener('click', async () => {
+  $('b-reiniciar').disabled = true; $('r-reiniciar').textContent = 'Reiniciando...';
+  await post('/api/configurar/reiniciar');
+  for (let i = 0; i < 80; i++) { await new Promise((r) => setTimeout(r, 750)); try { const s = await (await fetch('/api/saude')).json(); if (s.ok) { location.href = '/?auto=1&shell=electron'; return; } } catch (_) { /* ainda reiniciando */ } }
+  $('r-reiniciar').textContent = 'Demorou mais que o normal: feche e abra o Jarvis.';
+});
+</script>
+</body>
+</html>

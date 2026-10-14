@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Memória do Jarvis</title>
+<link rel="icon" type="image/png" href="/static/icone.png">
+<style>
+  :root { --c1:#00e5ff; --c2:#7df9ff; --bg:#02060d; --linha:rgba(0,229,255,.26); --texto:#cdeff7; --suave:rgba(150,215,232,.6); --erro:#ff4d6d; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: radial-gradient(ellipse at top, #06222f, var(--bg) 60%); color: var(--texto); font-family: Bahnschrift, "Segoe UI", sans-serif; min-height: 100vh; padding: 4vh 5vw; }
+  h1 { font-size: 22px; letter-spacing: .4em; color: var(--c2); text-shadow: 0 0 16px rgba(0,229,255,.5); font-weight: 700; }
+  .sub { color: var(--suave); font-size: 13px; letter-spacing: .08em; margin: 8px 0 26px; max-width: 760px; line-height: 1.5; }
+  .barra { display: flex; gap: 12px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+  input { background: rgba(0,229,255,.06); border: 1px solid var(--linha); color: var(--c2); padding: 10px 14px; width: min(420px, 100%); font: inherit; outline: none; }
+  input:focus { border-color: var(--c1); }
+  .total { color: var(--suave); font-size: 13px; letter-spacing: .15em; }
+  section { margin-bottom: 26px; }
+  h2 { font-size: 12px; letter-spacing: .35em; color: var(--c1); text-transform: uppercase; margin-bottom: 10px; display: flex; gap: 10px; align-items: center; }
+  h2::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--linha), transparent); }
+  .item { display: grid; grid-template-columns: 26px 1fr auto; gap: 12px; align-items: start; padding: 10px 14px; margin-bottom: 6px; background: rgba(3,16,28,.6); border: 1px solid var(--linha); }
+  .imp { font-size: 11px; letter-spacing: .1em; padding-top: 3px; }
+  .imp.i3 { color: #ffb703; } .imp.i2 { color: var(--c1); } .imp.i1 { color: var(--suave); }
+  .texto { line-height: 1.45; font-size: 15px; }
+  .meta { font-size: 11px; color: var(--suave); margin-top: 4px; letter-spacing: .08em; }
+  button { background: none; border: 1px solid var(--erro); color: #ff9aa9; padding: 6px 12px; cursor: pointer; font: inherit; font-size: 11px; letter-spacing: .2em; }
+  button:hover { background: rgba(255,77,109,.18); }
+  .vazio { color: var(--suave); }
+</style>
+</head>
+<body>
+<h1>MEMÓRIA DO JARVIS</h1>
+<p class="sub">Tudo o que ele aprendeu sobre você, guardado só neste computador (pasta <b>memoria</b>). Você pode apagar qualquer item; ele para de saber aquilo. Os itens são frases curtas que ele usa para te atender melhor.</p>
+<div class="barra"><input id="busca" placeholder="filtrar memórias..." autocomplete="off"><span class="total" id="total"></span></div>
+<div id="lista"></div>
+<script>
+let todas = [];
+const $ = (id) => document.getElementById(id);
+const norm = (t) => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const NOMES = { perfil: 'Perfil', preferencia: 'Preferências', rotina: 'Rotina', pessoas: 'Pessoas', trabalho: 'Trabalho', projetos: 'Projetos',
+  interesses: 'Interesses', objetivos: 'Objetivos', saude: 'Saúde', financas: 'Finanças', historia: 'História', opiniao: 'Opiniões', lugares: 'Lugares', outros: 'Outros' };
+
+async function carregar() {
+  todas = await (await fetch('/api/memorias')).json();
+  desenhar();
+}
+
+function desenhar() {
+  const f = norm($('busca').value.trim());
+  const visiveis = todas.filter((m) => !f || norm(m.texto + ' ' + m.categoria).includes(f));
+  $('total').textContent = `${visiveis.length} DE ${todas.length} MEMÓRIAS`;
+  const lista = $('lista');
+  lista.replaceChildren();
+  if (!visiveis.length) { const p = document.createElement('p'); p.className = 'vazio'; p.textContent = 'Nada por aqui ainda.'; lista.append(p); return; }
+  const grupos = {};
+  for (const m of visiveis) (grupos[m.categoria] ||= []).push(m);
+  for (const cat of Object.keys(grupos)) {
+    const sec = document.createElement('section');
+    const h = document.createElement('h2'); h.textContent = NOMES[cat] || cat; sec.append(h);
+    for (const m of grupos[cat]) {
+      const it = document.createElement('div'); it.className = 'item';
+      const imp = document.createElement('span'); imp.className = 'imp i' + m.importancia; imp.textContent = '●'.repeat(m.importancia); imp.title = 'importância ' + m.importancia;
+      const corpo = document.createElement('div');
+      const t = document.createElement('div'); t.className = 'texto'; t.textContent = m.texto;
+      const meta = document.createElement('div'); meta.className = 'meta';
+      meta.textContent = `${new Date(m.criado * 1000).toLocaleDateString('pt-BR')} · ${m.fonte}`;
+      corpo.append(t, meta);
+      const b = document.createElement('button'); b.textContent = 'ESQUECER';
+      b.onclick = async () => {
+        if (!confirm('Apagar esta memória de vez?\n\n' + m.texto)) return;
+        await fetch(`/api/memorias/${m.id}/esquecer`, { method: 'POST' });
+        carregar();
+      };
+      it.append(imp, corpo, b); sec.append(it);
+    }
+    lista.append(sec);
+  }
+}
+$('busca').addEventListener('input', desenhar);
+carregar();
+</script>
+</body>
+</html>

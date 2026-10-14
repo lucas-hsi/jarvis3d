@@ -1,0 +1,14 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+anthropic>=1.0.0
+httpx>=0.27.0
+playwright>=1.40.0
+Pillow>=10.0.0
+psutil>=5.9.0
+sounddevice>=0.4.6
+numpy>=1.26.0
+keyring>=25.0.0
+uiautomation
+fastembed
+faster-whisper>=1.0.3
+huggingface-hub>=0.24

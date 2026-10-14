@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:">
+<title>Jarvis</title>
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; user-select: none; -webkit-user-select: none; }
+  #orbe { position: absolute; inset: 0; margin: auto; width: 84px; height: 84px; cursor: pointer; transition: transform .18s cubic-bezier(.2,.8,.2,1); }
+  #orbe:hover { transform: scale(1.12); }
+  #orbe:active { transform: scale(.96); }
+  #dica { position: absolute; left: 0; right: 0; bottom: 1px; text-align: center; font: 600 8px/1 "Segoe UI", sans-serif; letter-spacing: .22em; color: rgba(160, 235, 255, .0); transition: color .2s; pointer-events: none; }
+  body:hover #dica { color: rgba(160, 235, 255, .85); }
+</style>
+</head>
+<body data-estado="espera">
+<canvas id="orbe" width="168" height="168"></canvas>
+<div id="dica">JARVIS</div>
+<script>
+'use strict';
+const cv = document.getElementById('orbe'), g = cv.getContext('2d');
+const CORES = { espera: [0, 190, 220], ouvindo: [0, 229, 255], pensando: [255, 183, 3], falando: [90, 215, 255], offline: [255, 77, 109] };
+let estado = 'espera', cor = CORES.espera.slice(), giro = 0, pulso = 0;
+const GIRO = { espera: 0.25, ouvindo: 0.5, pensando: 2.2, falando: 0.8, offline: 0.05 };
+const lerp = (a, b, k) => a + (b - a) * k;
+const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+
+window.jarvisFlutuante.onEstado((e) => { estado = CORES[e] ? e : 'espera'; document.body.dataset.estado = estado; });
+
+let t0 = performance.now(), ultimo = 0;
+function quadro(agora) {
+    requestAnimationFrame(quadro);
+    if (agora - ultimo < 33) return;                                 // ~30 quadros por segundo bastam e poupam bateria
+    const dt = Math.min(0.1, (agora - ultimo) / 1000); ultimo = agora;
+    const t = (agora - t0) / 1000;
+    const alvo = CORES[estado];
+    for (let i = 0; i < 3; i++) cor[i] = lerp(cor[i], alvo[i], 0.12);
+    giro += dt * GIRO[estado];
+    pulso = estado === 'falando' ? 0.5 + 0.5 * Math.abs(Math.sin(t * 7.3) * Math.sin(t * 2.9)) : estado === 'ouvindo' ? 0.5 + 0.5 * Math.sin(t * 2.2) : 0.5 + 0.5 * Math.sin(t * 1.2);
+    const W = cv.width, c = W / 2, R = W * 0.34;
+    g.clearRect(0, 0, W, W);
+    g.globalCompositeOperation = 'lighter';
+    const halo = g.createRadialGradient(c, c, R * 0.1, c, c, R * 1.55);
+    halo.addColorStop(0, rgba(cor, 0.5 + 0.25 * pulso)); halo.addColorStop(0.5, rgba(cor, 0.16)); halo.addColorStop(1, rgba(cor, 0));
+    g.fillStyle = halo; g.beginPath(); g.arc(c, c, R * 1.55, 0, Math.PI * 2); g.fill();
+    g.lineCap = 'round';
+    g.strokeStyle = rgba(cor, 0.9); g.lineWidth = 5;                              // arcos externos
+    for (let i = 0; i < 3; i++) { const a = giro * 1.3 + (i / 3) * Math.PI * 2; g.beginPath(); g.arc(c, c, R * 1.02, a, a + 1.35); g.stroke(); }
+    g.strokeStyle = rgba(cor, 0.55); g.lineWidth = 3;
+    for (let i = 0; i < 2; i++) { const a = -giro * 2.1 + i * Math.PI; g.beginPath(); g.arc(c, c, R * 0.76, a, a + 1.9); g.stroke(); }
+    g.strokeStyle = rgba(cor, 0.35); g.lineWidth = 2;                             // marcas do relógio
+    for (let i = 0; i < 36; i++) { const a = (i / 36) * Math.PI * 2 - giro * 0.4; g.beginPath(); g.moveTo(c + Math.cos(a) * R * 1.16, c + Math.sin(a) * R * 1.16); g.lineTo(c + Math.cos(a) * R * (i % 3 ? 1.22 : 1.3), c + Math.sin(a) * R * (i % 3 ? 1.22 : 1.3)); g.stroke(); }
+    const nr = R * (0.34 + 0.1 * pulso);                                          // núcleo
+    const nuc = g.createRadialGradient(c, c, 0, c, c, nr * 1.8);
+    nuc.addColorStop(0, 'rgba(255,255,255,.95)'); nuc.addColorStop(0.35, rgba(cor, 0.85)); nuc.addColorStop(1, rgba(cor, 0));
+    g.fillStyle = nuc; g.beginPath(); g.arc(c, c, nr * 1.8, 0, Math.PI * 2); g.fill();
+}
+requestAnimationFrame(quadro);
+
+// clique abre o Jarvis; arrastar move o ícone (diferencia pelos 5 px de movimento)
+let ini = null;
+cv.addEventListener('pointerdown', (e) => { if (e.button !== 0) return; cv.setPointerCapture(e.pointerId); ini = { x: e.screenX, y: e.screenY, movido: false }; window.jarvisFlutuante.arrastarInicio(); });
+cv.addEventListener('pointermove', (e) => {
+    if (!ini) return;
+    if (!ini.movido && Math.hypot(e.screenX - ini.x, e.screenY - ini.y) > 5) ini.movido = true;
+    if (ini.movido) window.jarvisFlutuante.arrastar(e.screenX - ini.x, e.screenY - ini.y);
+});
+cv.addEventListener('pointerup', (e) => {
+    if (!ini) return;
+    const foiClique = !ini.movido; ini = null;
+    window.jarvisFlutuante.arrastarFim();
+    if (foiClique) window.jarvisFlutuante.clique();
+});
+cv.addEventListener('contextmenu', (e) => { e.preventDefault(); window.jarvisFlutuante.menu(); });
+</script>
+</body>
+</html>

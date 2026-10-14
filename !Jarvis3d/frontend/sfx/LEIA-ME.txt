@@ -1,0 +1,3 @@
+Opcional: ponha aqui MP3 com o nome do efeito para trocar o som sintetizado.
+Nomes: ativacao, scan, ok, erro, alerta, confirmado, negado, controle_on, controle_off, feliz, adrenalina, triunfo, tensao, sarcasmo
+Exemplo: frontend\sfxdrenalina.mp3
