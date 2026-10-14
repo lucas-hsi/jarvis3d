@@ -24,13 +24,28 @@
     let confirmacaoTimer = null;
     let midiaAtiva = false;     // há música/vídeo tocando: só ouço comandos que comecem chamando "Jarvis"
     let duckAvisado = false;
-    const CHAMOU_JARVIS = /\b(j[aá]r?v[iíy]s|j[aá]rbis|g[aá]rvis|d?j[aá]rvis|jarvi|jarves)\b/i;
+    const CHAMOU_JARVIS = /\b(j[aá]r?v[iíy]s|j[aá]rbis|g[aá]rvis|d?j[aá]rvis|jarvi|jarves|ch?[aá]rvis|j[aá]rv[eo]s|j[aá]vis|[jg][eé]rv[iíy]s|jarvin)\b/i;
     // Modo conversa: enquanto vocês estão conversando (até `janelaConversaMs` sem ninguém falar) respondo tudo, sem precisar do nome.
     // Depois de um tempo em silêncio, ou se ele disser tchau/"me aguarda" (encerrar_conversa), só respondo se me chamarem por "Jarvis".
     let exigeChamada = true, janelaConversaMs = 90000, janelaAte = 0, conversaEncerrada = false;
     const CONFIANCA_MIN = 0.3;  // abaixo disso o reconhecedor está chutando (barulho, TV, outra pessoa)
     const CONFIANCA_LOCAL_MIN = 0.45;   // o reconhecimento próprio é mais exigente: uma fala duvidosa não pode acordar o Jarvis
-    const decisao = (r, acao, motivo) => { if (r && r.id) enviar({ tipo: 'voz_decisao', id: r.id, acao, motivo }); };   // alimenta o painel 'Últimas falas ouvidas'
+    const decisao = (r, acao, motivo) => {
+        if (r && r.id) enviar({ tipo: 'voz_decisao', id: r.id, acao, motivo });
+        if (acao === 'ignorou' && r && r.transcript && /^sem o nome/.test(motivo || '')) dicaOuvi(r.transcript);       // ele ouviu, mas faltou o nome: mostra isso em vez de calar
+    };
+    let dicaT = 0;
+    function dicaOuvi(texto) {
+        const el = $('legenda-voce');
+        el.textContent = `ouvi: “${String(texto).slice(0, 90)}”  ·  diga “Jarvis” primeiro (ou clique em AGUARDANDO / tecla T)`;
+        el.classList.add('parcial');
+        clearTimeout(dicaT); dicaT = setTimeout(() => { if (el.textContent.startsWith('ouvi:')) el.textContent = ''; }, 6000);
+    }
+    function abrirConversa() {                                        // clique no estado ou tecla T: fala sem dizer o nome durante a janela de conversa
+        conversaEncerrada = false; janelaAte = performance.now() + janelaConversaMs;
+        aviso('Pode falar: não precisa dizer “Jarvis” pelos próximos ' + Math.round(janelaConversaMs / 1000) + ' s.', 3500);
+        if (estado === 'ouvindo' || estado === 'espera') iniciarReconhecimento();
+    }   // alimenta o painel 'Últimas falas ouvidas'
     let gravando = false;       // modo gravação: silêncio total, e só respondo se me chamarem pelo nome
     // "Jarvis" só é uma chamada se estiver no COMEÇO ou no FIM da fala; no meio ("o Jarvis falou que...") é conversa sobre ele
     function chamouMesmo(texto) {
@@ -879,11 +894,15 @@
         else if (e.key === 'm' || e.key === 'M') alternarMudo();
         else if (e.key === 'g' || e.key === 'G') alternarGestos();
         else if (e.key === 'b' || e.key === 'B') { if (window.UI) UI.alternarFoco(); }
+        else if (e.key === 't' || e.key === 'T') abrirConversa();
         else if (e.key === 'f' || e.key === 'F') {
             if (document.fullscreenElement) document.exitFullscreen();
             else document.documentElement.requestFullscreen().catch(() => {});
         }
     });
+
+    document.querySelector('.status-pill').addEventListener('click', abrirConversa);
+    document.querySelector('.status-pill').style.cursor = 'pointer';
 
     function alternarMudo() {
         mudo = !mudo;

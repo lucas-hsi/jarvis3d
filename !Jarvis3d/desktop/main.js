@@ -72,10 +72,10 @@ function saude(tempoMs = 1200) {
 function comandoDoServidor() {
     if (EMPACOTADO) {
         const exe = path.join(process.resourcesPath, 'server', 'jarvis-server.exe');
-        return { exe, args: [], cwd: path.dirname(exe), env: { JARVIS_HOME: app.getPath('userData') } };
+        return { exe, args: [], cwd: path.dirname(exe), env: { JARVIS_HOME: app.getPath('userData'), JARVIS_STT: 'local' } };
     }
     const py = path.join(REPO, '.venv', 'Scripts', 'python.exe');
-    return { exe: fs.existsSync(py) ? py : 'python', args: [path.join(REPO, 'server.py')], cwd: REPO, env: {} };
+    return { exe: fs.existsSync(py) ? py : 'python', args: [path.join(REPO, 'server.py')], cwd: REPO, env: { JARVIS_STT: 'local' } };
 }
 
 async function garantirServidor() {
@@ -168,11 +168,13 @@ function configurarAtualizacao() {
     if (!EMPACOTADO || MODO_TESTE) return;
     let cfg = {};
     try { cfg = JSON.parse(fs.readFileSync(path.join(process.resourcesPath, 'atualizacao.json'), 'utf8')); } catch (_) { /* sem arquivo = desligado */ }
+    // %APPDATA%\Jarvis\atualizacao.json (do usuário, fora do repositório) pode trazer um "token" do GitHub (só leitura) se o repositório for PRIVADO
+    try { cfg = { ...cfg, ...JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'atualizacao.json'), 'utf8')) }; } catch (_) { /* opcional */ }
     if (!cfg.owner || !cfg.repo) { log('atualização automática desligada (preencha owner e repo em atualizacao.json)'); return; }
     try {
         const { autoUpdater } = require('electron-updater');
         atualizador = autoUpdater;
-        autoUpdater.setFeedURL({ provider: 'github', owner: cfg.owner, repo: cfg.repo });
+        autoUpdater.setFeedURL(cfg.token ? { provider: 'github', owner: cfg.owner, repo: cfg.repo, private: true, token: cfg.token } : { provider: 'github', owner: cfg.owner, repo: cfg.repo });
         autoUpdater.autoDownload = true;
         autoUpdater.autoInstallOnAppQuit = true;
         autoUpdater.logger = { info: (m) => log('atualizador:', m), warn: (m) => log('atualizador (aviso):', m), error: (m) => log('atualizador (erro):', m), debug: () => {} };
@@ -372,9 +374,11 @@ async function rodarTeste(servidorOk) {
 // ------------------------------------------------------------------ teste da VOZ (electron . --teste-voz): microfone falso -> servidor -> texto -> interface
 async function rodarTesteVoz(servidorOk) {
     const r = { servidor: servidorOk };
+    janela.webContents.on('console-message', (e) => { if (process.env.JARVIS_DEBUG_PAGINA) process.stdout.write('[pagina] ' + String(e.message || '').slice(0, 220) + String.fromCharCode(10)); });
     try {
         await new Promise((res) => (janela.webContents.isLoading() ? janela.webContents.once('did-finish-load', res) : res()));
         await new Promise((res) => setTimeout(res, 1500));
+        for (let i = 0; i < 120; i++) { if (await janela.webContents.executeJavaScript("fetch('/api/saude').then((x) => x.json()).then((x) => x.stt === 'pronto')")) break; await new Promise((res) => setTimeout(res, 500)); }      // o 'microfone' falso é tocado UMA vez ao abrir: só abre com o Whisper pronto
         await janela.webContents.executeJavaScript(`(() => {
             window.__capturadas = [];
             const original = WebSocket.prototype.send;

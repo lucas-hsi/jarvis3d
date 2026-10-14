@@ -93,6 +93,19 @@
     </div>
   </div>
 
+  <div class="card larga">
+    <h2>O que o Jarvis ouviu (últimas falas) e por que respondeu ou não</h2>
+    <div class="linha">
+      <label class="mini">Sensibilidade do microfone
+        <select id="v-sens"><option value="baixa">baixa (sala barulhenta)</option><option value="media">média</option><option value="alta">alta (voz baixa ou longe)</option></select></label>
+      <label class="mini">Janela de conversa (s sem dizer "Jarvis")
+        <select id="v-janela"><option>15</option><option>30</option><option>45</option><option>90</option><option>180</option></select></label>
+      <span class="mini" id="v-msg"></span>
+    </div>
+    <div class="caixa" id="v-lista" style="font-family:Consolas,monospace; font-size:12.5px; white-space:pre-wrap; max-height:260px; overflow:auto">—</div>
+    <div class="mini" style="margin-top:6px">Mostra o texto ouvido, a confiança, o nível (dBFS) e a decisão. "ignorou: sem o nome Jarvis" = ele ouviu, mas faltou chamar pelo nome (ou clique em AGUARDANDO / tecla T no painel para falar sem o nome).</div>
+  </div>
+
   <div class="card">
     <h2>Navegador e placa gráfica</h2>
     <div id="lista-navegador"></div>
@@ -277,6 +290,33 @@ servidor();
     await Gestos.ligar();
     if (Gestos.estado().ligado && !desenhando) desenhar();
   });
+})();
+</script>
+
+<script>
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  async function atualizar() {
+    try {
+      const d = await (await fetch('/api/voz-recente')).json();
+      if (document.activeElement !== $('v-sens')) $('v-sens').value = d.sensibilidade || 'media';
+      if (document.activeElement !== $('v-janela')) $('v-janela').value = String(Math.round(d.janela_conversa_seg || 45));
+      const linhas = (d.itens || []).slice(-30).reverse().map((e) => {
+        if (e.tipo === 'fala') return `${e.hora}  OUVIU  "${e.texto}"  (conf ${e.confianca}, ${e.nivel_db} dBFS, ${e.dur_ms} ms)  → ${e.decisao || '...'}${e.motivo_decisao ? ': ' + e.motivo_decisao : ''}`;
+        return `${e.hora}  ruído  ${e.motivo}  (${e.nivel_db} dBFS, ${e.dur_ms} ms)`;
+      });
+      $('v-lista').textContent = linhas.join('\n') || 'Ainda não ouviu nada.';
+    } catch (_) { $('v-lista').textContent = 'Sem conexão com o servidor.'; }
+  }
+  async function ajustar(campo, valor) {
+    const r = await (await fetch('/api/ajuste', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [campo]: valor }) })).json();
+    $('v-msg').textContent = r.ok ? 'salvo' : 'não salvou';
+    setTimeout(() => { $('v-msg').textContent = ''; }, 2000);
+  }
+  $('v-sens').addEventListener('change', () => ajustar('stt_sensibilidade', $('v-sens').value));
+  $('v-janela').addEventListener('change', () => ajustar('janela_conversa_seg', Number($('v-janela').value)));
+  setInterval(atualizar, 2000); atualizar();
 })();
 </script>
 </body>

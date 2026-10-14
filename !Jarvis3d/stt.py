@@ -49,6 +49,13 @@ def corrigir_nome(texto: str) -> str:
     m = _NOME_ERRADO.match(texto)
     if m and not texto[:m.end()].lower().startswith("jarvis"):
         return "Jarvis, " + texto[m.end():].lstrip()
+    # parecido com "Jarvis" por semelhança de som/grafia (Garvis, Jarvez, Charvis...): só a PRIMEIRA palavra
+    import difflib
+    primeira = re.match(r"^\W*(\w+)\b[\s,.!?:;-]*", texto)
+    if primeira:
+        palavra = _norm(primeira.group(1))
+        if palavra and palavra[0] != "jarvis" and difflib.SequenceMatcher(None, palavra[0], "jarvis").ratio() >= 0.74 and len(palavra[0]) >= 5:
+            return "Jarvis, " + texto[primeira.end():].lstrip()
     return texto
 
 
@@ -61,9 +68,9 @@ UMA_PALAVRA_OK = {"para", "pare", "parar", "chega", "espera", "espere", "aguarda
 
 # Provas de "isto é fala": quanto maior a sensibilidade, mais permissivas (e mais falsos disparos)
 PRESETS = {
-    "baixa": dict(snr_liga=14.0, abs_liga=-42.0, snr_desliga=7.0, abs_desliga=-48.0, abs_pico=-37.0, razao_voz=0.40, planura=0.42),
-    "media": dict(snr_liga=11.0, abs_liga=-46.0, snr_desliga=6.0, abs_desliga=-51.0, abs_pico=-40.0, razao_voz=0.32, planura=0.48),
-    "alta":  dict(snr_liga=8.0,  abs_liga=-50.0, snr_desliga=5.0, abs_desliga=-55.0, abs_pico=-44.0, razao_voz=0.25, planura=0.55),
+    "baixa": dict(snr_liga=12.0, abs_liga=-44.0, snr_desliga=6.0, abs_desliga=-50.0, abs_pico=-39.0, razao_voz=0.30, planura=0.46),
+    "media": dict(snr_liga=9.0,  abs_liga=-48.0, snr_desliga=5.0, abs_desliga=-53.0, abs_pico=-44.0, razao_voz=0.20, planura=0.52),
+    "alta":  dict(snr_liga=7.0,  abs_liga=-52.0, snr_desliga=4.0, abs_desliga=-56.0, abs_pico=-47.0, razao_voz=0.16, planura=0.58),
 }
 EXTRA_FALANDO_DB = 9.0                        # enquanto o Jarvis fala, tudo precisa ser 9 dB mais forte (eco residual dos alto-falantes)
 
@@ -200,7 +207,7 @@ class Transcritor:
             return "", confianca, "frase típica de alucinação do Whisper"
         if confianca < 0.30:
             return "", confianca, f"confiança baixa ({confianca:.2f})"
-        if pal == ["jarvis"] and confianca < 0.55:
+        if pal == ["jarvis"] and confianca < 0.40:
             return "", confianca, f"só o nome, com pouca certeza ({confianca:.2f}): provável alucinação"
         if len(pal) == 1 and pal[0] not in UMA_PALAVRA_OK:
             return "", confianca, "uma palavra solta que não é comando"
@@ -231,7 +238,7 @@ class Segmentador:
 
     CALIBRACAO_Q = 25                                           # 0,5 s de escuta para descobrir o ruído de fundo da sala
 
-    def __init__(self, fim_ms: int = 480, inicio_ms: int = 100, pre_ms: int = 600, max_s: float = 14.0, min_ms: int = 300,
+    def __init__(self, fim_ms: int = 480, inicio_ms: int = 100, pre_ms: int = 600, max_s: float = 14.0, min_ms: int = 200,
                  sensibilidade: str = "media", especulativo_ms: int = 240):
         self.fim_q, self.ini_q, self.pre_q = fim_ms // 20, max(1, inicio_ms // 20), pre_ms // 20
         self.max_q, self.min_q = int(max_s * 1000 / 20), max(1, min_ms // 20)
@@ -329,7 +336,7 @@ class Segmentador:
                 if planura > p["planura"]:
                     ruim = f"som plano, não é voz (planura {planura:.2f})"
             self.reiniciar()
-            eventos.append(("descartado", ruim, duracao, nivel) if ruim else ("fim", audio, duracao, nivel))
+            eventos.append(("descartado", ruim, duracao, nivel, audio) if ruim else ("fim", audio, duracao, nivel))
         return eventos
 
     def alimentar(self, pcm: np.ndarray) -> list[tuple]:
@@ -343,6 +350,23 @@ class Segmentador:
 
 
 # ------------------------------------------------------------------ uma sessão (uma conexão com a interface)
+
+DEBUG_DIR = os.environ.get("JARVIS_STT_DEBUG")             # só para diagnóstico: guarda os últimos trechos ouvidos (áudio) NESTA pasta, localmente
+
+
+def _despejar(audio: np.ndarray, rotulo: str):
+    if not DEBUG_DIR or audio is None:
+        return
+    import wave
+    pasta = Path(DEBUG_DIR)
+    pasta.mkdir(parents=True, exist_ok=True)
+    nome = pasta / (time.strftime("%H%M%S") + "_" + re.sub(r"\W+", "_", rotulo)[:40] + ".wav")
+    with wave.open(str(nome), "wb") as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(TAXA)
+        w.writeframes((np.clip(audio, -1, 1) * 32767).astype("<i2").tobytes())
+    for velho in sorted(pasta.glob("*.wav"))[:-24]:
+        velho.unlink(missing_ok=True)
+
 
 class SessaoSTT:
     def __init__(self, transcritor: Transcritor, emitir, fim_ms: int = 480, registrar_metrica=None, sensibilidade: str = "media"):
@@ -386,6 +410,8 @@ class SessaoSTT:
             elif tipo == "descartado":
                 self._spec = None
                 registrar({"tipo": "ruido", "motivo": ev[1], "dur_ms": ev[2], "nivel_db": round(ev[3], 1)})
+                if len(ev) > 4:
+                    _despejar(ev[4], "desc_" + ev[1])
                 await self.emitir({"tipo": "vad", "fala": False, "descartado": ev[1]})
             elif tipo == "fim":
                 await self.emitir({"tipo": "vad", "fala": False, "transcrevendo": True})
@@ -418,10 +444,12 @@ class SessaoSTT:
         if self.registrar_metrica:
             self.registrar_metrica({"stt_audio_ms": duracao_ms, "stt_transcricao_ms": r["ms"]})
         if r["texto"]:
+            _despejar(audio, "ok_" + r["texto"])
             id_ = registrar({"tipo": "fala", "texto": r["texto"], "confianca": round(r["confianca"], 2), "dur_ms": duracao_ms,
                              "nivel_db": round(nivel_db, 1), "ms": r["ms"], "especulativa": especulativa})
             await self.emitir({"tipo": "transcricao", "id": id_, "texto": r["texto"], "final": True, "confianca": round(r["confianca"], 2),
                                "duracao_ms": duracao_ms, "transcricao_ms": r["ms"], "nivel_db": round(nivel_db, 1)})
         else:
+            _despejar(audio, "whisper_" + r["motivo"])
             registrar({"tipo": "ruido", "motivo": r["motivo"], "dur_ms": duracao_ms, "nivel_db": round(nivel_db, 1), "ms": r["ms"]})
             await self.emitir({"tipo": "vad", "fala": False, "descartado": r["motivo"]})

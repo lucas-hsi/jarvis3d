@@ -1423,7 +1423,7 @@ async def vida(app: FastAPI):
     await asyncio.to_thread(atualizar_cofre)
     await asyncio.to_thread(aquecer_memoria)               # a 1ª fala depois de abrir não pode pagar a consulta 'a frio' ao banco
     asyncio.get_running_loop().create_task(asyncio.to_thread(ferramentas.catalogo_de_apps))      # lista de apps instalados já pronta para 'abre o ...'
-    if CFG.get("stt") == "local" and stt.disponivel() and stt.modelo_em_disco(CFG.get("stt_modelo", stt.MODELO_PADRAO)):
+    if (CFG.get("stt") == "local" or os.environ.get("JARVIS_STT") == "local") and stt.disponivel() and stt.modelo_em_disco(CFG.get("stt_modelo", stt.MODELO_PADRAO)):
         obter_stt().carregar_em_segundo_plano()          # reconhecimento próprio já aquecido quando a interface pedir
     asyncio.get_running_loop().create_task(preparar_fillers())      # em segundo plano; só gasta voz na 1ª vez (ou se trocar de voz)
     await atualizar_clima()
@@ -1675,7 +1675,8 @@ async def pagina_diagnostico():
 async def saude():
     return {"ok": True, "clientes": len(CLIENTES), "janelas": sum(s.janela and 1 or 0 for s in CLIENTES),
             "janelas_em_espera": sum(s.janela and s.em_espera for s in CLIENTES),
-            "voz": estado_voz(), "modelo": MODELO, "configurado": _chave_ok(CFG.get("anthropic_api_key"))}
+            "voz": estado_voz(), "modelo": MODELO, "configurado": _chave_ok(CFG.get("anthropic_api_key")),
+            "stt": STT_MOTOR.estado() if STT_MOTOR is not None else "off"}
 
 
 def _chave_ok(valor) -> bool:

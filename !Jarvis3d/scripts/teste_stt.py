@@ -175,7 +175,7 @@ def sensibilidade(audios):
     checar(len(fins) == 1, "você falando forte, perto do microfone, por cima do Jarvis (-22 dBFS) ainda o interrompe")
 
     meio = escalar(f1, -42.0)
-    for nome, esperado in (("baixa", 0), ("media", 0), ("alta", 1)):
+    for nome, esperado in (("baixa", 0), ("media", 1), ("alta", 1)):
         seg = stt.Segmentador(sensibilidade=nome)
         fins = [e for e in seg.alimentar(np.concatenate([ruido(1), meio, ruido(1.2, semente=27)])) if e[0] == "fim"]
         checar(len(fins) == esperado, f"sensibilidade '{nome}': voz a -42 dBFS {'aceita' if esperado else 'ignorada'} (achou {len(fins)})")
