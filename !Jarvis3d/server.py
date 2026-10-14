@@ -395,6 +395,7 @@ REGRAS FIXAS (valem sempre):
 - Nunca invente nem adivinhe dados (clima, números, notícias, estado dos projetos). Se não estiver no contexto acima nem vier de uma ferramenta, diga que não tem essa informação agora.
 - Você controla o notebook do {nome} só pelas ferramentas. Você NÃO roda comandos e NÃO apaga arquivos de vez: "apagar" é mandar para o lixo do Jarvis (recuperável). Ferramentas que alteram algo pedem confirmação do usuário por conta própria: não pergunte antes se pode, apenas chame a ferramenta, e respeite se ele recusar.
 - Seja decidido e esperto: pedido claro e de baixo risco (abrir um programa ou site, tirar a foto que ele pediu, tocar música, mudar a tela, mexer no volume) você FAZ na hora, sem perguntar se pode e sem pedir licença. Para ABRIR um programa use só abrir_programa (qualquer app instalado serve, pelo nome); NÃO use iniciar_controle para isso. Use iniciar_controle só quando precisar clicar ou digitar DENTRO de um programa. Pergunte apenas quando faltar um dado essencial.
+- Não se contradiga: o resultado de abrir_programa JÁ confere se a janela apareceu (diz 'aberto', 'já estava aberto' ou 'nenhuma janela apareceu'). Confie nele: NÃO use ver_tela para conferir e NÃO diga depois que "tinha falado que abri mas não tinha aberto". Só mude o que disse se uma ferramenta nova trouxer prova nova; e nunca afirme que algo funcionou se o resultado disse o contrário.
 - Programas do Windows: PREFIRA janela_ver (controles numerados) e janela_acao (agir pelo número); eles acionam botões e preenchem campos sem adivinhar pixels e devolvem a lista nova a cada ação. Chame iniciar_controle antes de janela_acao. Só use ver_tela + clicar por coordenadas quando janela_ver não mostrar controles. Se uma ferramenta que você precisa não está na sua lista, chame habilitar_ferramentas.
 - Para mexer com mouse e teclado: chame iniciar_controle, depois ver_tela, e vá em passos curtos conferindo o print que volta de cada ação. Não chame ferramentas de controle em paralelo. Se o freio de emergência disparar ou o usuário recusar, pare e diga que parou.
 - Navegador e música: para tocar música ou vídeo use youtube_buscar (busque pelo nome da música e do artista) e controle com video_controle (pausar, continuar, próxima faixa, pular anúncio, avançar, volume...). Para operar um site, use navegador_ver para ver os elementos numerados e então navegador_clicar ou navegador_digitar pelo NÚMERO; isso é bem mais confiável do que clicar na tela. Use clicar/digitar da tela (modo controle) só para programas fora do navegador. Nunca diga que não consegue clicar ou pular sem antes tentar essas ferramentas. Se o anúncio não tem o botão Pular, diga que ele não é pulável e quanto falta.
@@ -1120,6 +1121,8 @@ async def rodar_ferramenta(sessao: Sessao, bloco) -> dict:
             conteudo, erro = await asyncio.wait_for(ferramentas.executar(nome, entrada, CFG, sessao), timeout=TEMPO_FERRAMENTA)
         except asyncio.TimeoutError:
             conteudo, erro = "A ferramenta demorou demais e foi interrompida.", True
+    if erro:
+        print(f"[jarvis] ferramenta '{nome}' falhou: {str(conteudo)[:240]}", flush=True)      # antes o motivo se perdia: só o modelo via
     await sessao.enviar({"tipo": "ferramenta", "id": bloco.id, "estado": "erro" if erro else "fim"})
     if not erro and isinstance(conteudo, str) and nome in ("consultar_cofre", "ler_nota", "buscar_memoria"):
         notas = [Path(t).stem for t in re.findall(r"^\[([^\]\n]+\.md)\]", conteudo, flags=re.M)]
@@ -1176,7 +1179,9 @@ async def executar_intencao(sessao: Sessao, it: dict, texto: str) -> bool:
     await sessao.enviar({"tipo": "ferramenta", "id": gid, "rotulo": rotulo, "detalhe": str(detalhe)[:60], "estado": "inicio"})
     try:
         if acao == "abrir":
-            await asyncio.to_thread(ferramentas.abrir_programa, it["programa"], CFG.get("programas", {}))
+            msg, est = await asyncio.to_thread(ferramentas.abrir_programa_verificado, it["programa"], CFG.get("programas", {}))
+            fala = {"aberto": f"{it['programa']} aberto.", "ja_aberto": f"{it['programa']} já estava aberto; trouxe para a frente.",
+                    "sem_janela": f"Mandei abrir {it['programa']}, mas a janela ainda não apareceu."}[est]
         elif acao == "midia":
             await asyncio.to_thread(windows_ctl.midia, it["valor"])
         elif acao == "volume":
@@ -1481,6 +1486,10 @@ async def _ligar_quando_pronto(sessao: "Sessao", motor):
             if sessao.stt is not None:
                 sessao.stt.ligar(True)
             await sessao.enviar({"tipo": "stt_estado", "estado": "pronto", "dispositivo": f"{motor.dispositivo}/{motor.tipo}", "modelo": motor.modelo})
+            if motor.dispositivo == "cpu":
+                import instalador_modelos
+                if await asyncio.to_thread(instalador_modelos.tem_nvidia) and not instalador_modelos.cuda_instalado():
+                    await sessao.enviar({"tipo": "aviso", "texto": "A voz está rodando no processador. Com a placa NVIDIA ela fica bem mais rápida: bandeja → Configurações e downloads → Aceleração NVIDIA."})
             return
         if estado == "erro":
             await sessao.enviar({"tipo": "stt_estado", "estado": "erro", "motivo": motor.erro})

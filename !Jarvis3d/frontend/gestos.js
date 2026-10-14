@@ -7,7 +7,7 @@
     const estado = { ligado: false, carregando: false, erro: '', fps: 0, mao: false, rosto: false, delegate: '' };
     const ouvintes = { gesto: [], estado: [] };
     let video = null, fluxo = null, maoDet = null, rostoDet = null, laco = 0, mod = null;
-    let regrasMao = null, regrasCabeca = null;
+    let regrasMao = null, regrasCabeca = null, suavizaMao = null;
     let ultimo = { mao: null, rosto: null, medidas: null, mao_estado: null };
     let semMaoDesde = 0, contaQuadros = 0, t0Fps = performance.now(), ultimoRosto = 0;
 
@@ -44,7 +44,7 @@
                 const i0 = performance.now();
                 const rm = maoDet.detectForVideo(video, agora);
                 estado.ms_mao = Math.round(performance.now() - i0);
-                const pm = rm && rm.landmarks && rm.landmarks[0] ? espelha(rm.landmarks[0]) : null;
+                const pm = suavizaMao(rm && rm.landmarks && rm.landmarks[0] ? espelha(rm.landmarks[0]) : null, agora);      // One Euro: tira o tremor
                 estado.mao = !!pm; ultimo.mao = pm;
                 for (const ev of regrasMao.atualizar(pm, agora, asp)) emitir('gesto', ev);
                 ultimo.mao_estado = pm ? regrasMao.estado(pm, asp) : null;
@@ -75,7 +75,7 @@
             video = document.createElement('video');
             video.playsInline = true; video.muted = true; video.srcObject = fluxo;
             await video.play();
-            regrasMao = R.criarMao(); regrasCabeca = R.criarCabeca();
+            regrasMao = R.criarMao(); regrasCabeca = R.criarCabeca(); suavizaMao = R.filtrarPontos(1.2, 8);
             estado.ligado = true;
             laco = setTimeout(quadro, 33);
         } catch (e) {

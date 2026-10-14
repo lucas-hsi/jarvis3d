@@ -131,5 +131,31 @@
         };
     }
 
-    return { LIM, dist, tamanhoMao, dedosEstendidos, centroPalma, criarMao, criarCabeca, medidasCabeca };
+    // ------------------------------------------------------------------ filtro One Euro (Casiez et al.): suaviza o tremor parado e quase não atrasa o movimento rápido
+    function umEuro(minCutoff = 1.2, beta = 8, dCutoff = 1.0) {
+        let xAnt = null, dxAnt = 0, tAnt = 0;
+        const alfa = (cutoff, dt) => { const tau = 1 / (2 * Math.PI * cutoff); return 1 / (1 + tau / dt); };
+        return (x, t) => {                                 // t em ms
+            if (xAnt === null) { xAnt = x; tAnt = t; return x; }
+            const dt = Math.max(0.001, (t - tAnt) / 1000);
+            const dx = (x - xAnt) / dt;
+            const ad = alfa(dCutoff, dt);
+            dxAnt = ad * dx + (1 - ad) * dxAnt;
+            const a = alfa(minCutoff + beta * Math.abs(dxAnt), dt);
+            xAnt = a * x + (1 - a) * xAnt; tAnt = t;
+            return xAnt;
+        };
+    }
+    function filtrarPontos(minCutoff, beta) {              // um filtro por coordenada de cada ponto; devolve (pontos, t) -> pontos suavizados
+        let fx = [], fy = [];
+        return (p, t) => {
+            if (!p) { fx = []; fy = []; return p; }
+            return p.map((q, i) => {
+                if (!fx[i]) { fx[i] = umEuro(minCutoff, beta); fy[i] = umEuro(minCutoff, beta); }
+                return { x: fx[i](q.x, t), y: fy[i](q.y, t), z: q.z };
+            });
+        };
+    }
+
+    return { umEuro, filtrarPontos, LIM, dist, tamanhoMao, dedosEstendidos, centroPalma, criarMao, criarCabeca, medidasCabeca };
 });

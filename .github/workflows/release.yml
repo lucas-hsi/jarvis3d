@@ -49,6 +49,15 @@ jobs:
         working-directory: '!Jarvis3d/desktop'
         run: npm ci
 
+      - name: Criar a Release da tag (uma só; o electron-builder só anexa os arquivos)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "${{ github.ref_name }}" *> $null
+          if ($LASTEXITCODE -ne 0) { gh release create "${{ github.ref_name }}" --title "Jarvis ${{ github.ref_name }}" --notes "Instalador do Jarvis ${{ github.ref_name }}. Quem já tem o Jarvis instalado recebe esta versão sozinho." }
+
       - name: Gerar o instalador e publicar na Release
         working-directory: '!Jarvis3d/desktop'
         env:

@@ -14,6 +14,7 @@ import asyncio
 import base64
 import io
 import os
+import re
 import shutil
 import subprocess
 import webbrowser
@@ -147,7 +148,7 @@ async def executar(nome: str, entrada, config: dict, sessao=None) -> tuple[list 
         if nome == "noticias":
             return await noticias(str(entrada.get("tema") or "").strip()), False
         if nome == "abrir_programa":
-            return abrir_programa(_texto(entrada, "programa"), config.get("programas", {})), False
+            return abrir_programa_verificado(_texto(entrada, "programa"), config.get("programas", {}))[0], False
         if nome == "consultar_cofre":
             import memoria
             achados = await asyncio.to_thread(memoria.instancia().buscar_cofre, _texto(entrada, "busca"), 6, 1)
@@ -349,6 +350,55 @@ def achar_app(nome: str, apps: list[dict]) -> dict | None:
         return nomes[min(contem, key=len)]
     parecido = difflib.get_close_matches(q, list(nomes), n=1, cutoff=0.88)
     return nomes[parecido[0]] if parecido else None
+
+
+# o que aparece no título da janela de programas cujo comando/atalho não tem o mesmo nome (para CONFERIR que abriu de verdade)
+ALIAS_JANELA = {"calc": "calculadora", "notepad": "bloco de notas", "msedge": "edge", "explorer": "explorador", "taskmgr": "gerenciador de tarefas",
+                "ms-settings": "configuracoes", "chrome": "chrome", "spotify": "spotify", "obsidian": "obsidian"}
+
+
+def _titulos() -> list[tuple[int, str]]:
+    try:
+        import windows_ctl
+        return windows_ctl.listar_janelas()
+    except Exception:
+        return []
+
+
+def abrir_programa_verificado(nome: str, programas: dict, espera_s: float = 5.0) -> tuple[str, str]:
+    """Abre o programa e CONFERE pela lista de janelas do Windows. Devolve (texto, estado): 'aberto' (apareceu uma janela), 'ja_aberto'
+    (já havia uma e foi trazida para a frente) ou 'sem_janela' (mandei abrir, mas nenhuma janela apareceu ainda; pode demorar)."""
+    import time as _t
+    chave = _sem_acento_min(nome)
+    alvo = programas.get(nome) or next((v for k, v in programas.items() if _sem_acento_min(k) == chave), "")
+    pistas = {chave}
+    for pedaco in re.split(r"[\s:/\\.]+", _sem_acento_min(str(alvo))):
+        if pedaco in ALIAS_JANELA:
+            pistas.add(ALIAS_JANELA[pedaco])
+    if chave in ALIAS_JANELA:
+        pistas.add(ALIAS_JANELA[chave])
+    pistas = {p for p in pistas if len(p) >= 3}
+    casa = lambda titulo: any(p in _sem_acento_min(titulo) for p in pistas)      # noqa: E731
+    lista_antes = _titulos()
+    antes = {h for h, _t_ in lista_antes}
+    titulos_antes = {t for _h, t in lista_antes}
+    ja = next(((h, t) for h, t in _titulos() if casa(t)), None)
+    exibido = abrir_programa(nome, programas)
+    if ja:
+        try:
+            import windows_ctl
+            windows_ctl.acao_na_janela(ja[1][:30], "focar")
+        except Exception:
+            pass
+        return f"{nome} já estava aberto (janela '{ja[1][:60]}'); trouxe para a frente.", "ja_aberto"
+    limite = _t.monotonic() + espera_s
+    while _t.monotonic() < limite:
+        _t.sleep(0.25)
+        agora = _titulos()
+        nova = next(((h, t) for h, t in agora if casa(t)), None) or next(((h, t) for h, t in agora if h not in antes and t.strip() and t not in titulos_antes), None)
+        if nova:
+            return f"{nome} aberto (janela '{nova[1][:60]}').", "aberto"
+    return f"Mandei abrir {nome}, mas nenhuma janela apareceu em {espera_s:.0f} s (pode estar demorando ou abriu em segundo plano). Não afirme que abriu; diga que mandou abrir.", "sem_janela"
 
 
 def abrir_programa(nome: str, programas: dict) -> str:

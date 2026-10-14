@@ -187,7 +187,7 @@ function configurarAtualizacao() {
         });
         autoUpdater.on('error', (e) => { log('atualização: erro', e && e.message); });
         setTimeout(verificarAtualizacao, 30000);
-        setInterval(verificarAtualizacao, 6 * 3600 * 1000);
+        setInterval(verificarAtualizacao, 2 * 3600 * 1000);
     } catch (e) { log('atualização indisponível:', e.message); }
 }
 function verificarAtualizacao() { if (atualizador) atualizador.checkForUpdates().catch((e) => log('atualização: falha ao checar', e && e.message)); }
@@ -203,6 +203,7 @@ function montarBandeja() {
         { label: 'Ícone flutuante na tela', type: 'checkbox', checked: lerCasca().flutuante_ligado !== false, click: (item) => { gravarCasca({ flutuante_ligado: item.checked }); atualizarFlutuante(); } },
         { label: 'Iniciar com o Windows', type: 'checkbox', checked: iniciaComWindows(),
           click: (item) => { app.setLoginItemSettings({ openAtLogin: item.checked, args: ['--oculto'] }); } },
+        { label: 'Configurações e downloads (chaves, voz, aceleração NVIDIA)', click: () => { janela.show(); janela.loadURL(`${URL_BASE}/configurar`); } },
         { label: 'Abrir a pasta de dados', click: () => shell.openPath(pastaDados()) },
         { type: 'separator' },
         { label: `Versão ${app.getVersion()}`, enabled: false },
