@@ -20,7 +20,6 @@ jobs:
       run:
         working-directory: '!Jarvis3d'
     env:
-      JARVIS_HOME: ${{ runner.temp }}\\jarvis-teste
       PYTHONUTF8: '1'
     steps:
       - uses: actions/checkout@v4
@@ -34,6 +33,8 @@ jobs:
         run: python -m pip install -r empacotar/requirements-lock.txt
       - name: Testes de Python
         shell: pwsh
+        env:
+          JARVIS_HOME: ${{ runner.temp }}\jarvis-teste
         run: |
           $falhas = @()
           foreach ($t in 'teste_intencoes','teste_politica','teste_roteador','teste_terminal','teste_proativo','teste_mouse_ar','teste_mcp','teste_fim_texto') {
