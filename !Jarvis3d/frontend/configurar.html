@@ -35,7 +35,9 @@
 
 <div class="card">
   <h2>1 · Chaves e nome</h2>
-  <label for="k-anthropic">Chave da Anthropic <b>(obrigatória: é o cérebro do Jarvis)</b> — <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">onde conseguir</a></label>
+  <label for="k-deepseek">Chave do DeepSeek <b>(cérebro barato, recomendado)</b> — <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener">onde conseguir</a> <span class="mini">(o Jarvis usa o DeepSeek e, se ele cair, a Anthropic)</span></label>
+  <input id="k-deepseek" type="password" autocomplete="off" placeholder="sk-..." spellcheck="false">
+  <label for="k-anthropic">Chave da Anthropic <b>(Claude: obrigatória se você não usar o DeepSeek; reserva se usar)</b> — <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">onde conseguir</a></label>
   <input id="k-anthropic" type="password" autocomplete="off" placeholder="sk-ant-..." spellcheck="false">
   <label for="k-eleven">Chave da ElevenLabs <span class="mini">(opcional: voz natural; sem ela o Jarvis fala com a voz do Windows)</span></label>
   <input id="k-eleven" type="password" autocomplete="off" placeholder="deixe em branco para pular" spellcheck="false">
@@ -53,6 +55,7 @@
   <h2>2 · Voz e memória (downloads de uma vez só)</h2>
   <p class="mini" style="margin-top:0">O reconhecimento de voz roda no seu computador (nada do que você fala vai para a nuvem para ser transcrito). Estes arquivos não vêm dentro do instalador por serem grandes.</p>
   <div class="item"><div><b>Reconhecimento de voz (Whisper)</b><div class="mini">~480 MB · necessário para falar com o Jarvis</div></div><div><span id="t-whisper" class="tag info">—</span> <button id="b-whisper">Baixar</button></div></div>
+  <div class="item"><div><b>Palavra de ativação "hey Jarvis"</b><div class="mini">~4 MB · opcional · chama o Jarvis mesmo quando a transcrição erra o nome</div></div><div><span id="t-chamado" class="tag info">—</span> <button id="b-chamado">Baixar</button></div></div>
   <div class="item"><div><b>Memória por significado</b><div class="mini">~220 MB · opcional (sem ela a busca é por palavras)</div></div><div><span id="t-embeddings" class="tag info">—</span> <button id="b-embeddings">Baixar</button></div></div>
   <div class="item" id="linha-cuda"><div><b>Aceleração pela placa NVIDIA</b><div class="mini">~1,1 GB · opcional · deixa a voz bem mais rápida (sem ela usa o processador)</div></div><div><span id="t-cuda" class="tag info">—</span> <button id="b-cuda">Baixar</button></div></div>
   <div class="linha"><div class="barra"><i id="prog"></i></div><span class="mini" id="prog-texto">nenhum download em andamento</span></div>
@@ -75,11 +78,12 @@ async function atualizar() {
   let e;
   try { e = await (await fetch('/api/configurar/estado')).json(); } catch (_) { return; }
   etiqueta($('t-whisper'), e.whisper, 'instalado', 'falta', 'erro');
+  etiqueta($('t-chamado'), e.chamado, 'instalado', 'não instalado', 'info');
   etiqueta($('t-embeddings'), e.embeddings, 'instalado', 'não instalado', 'info');
   $('linha-cuda').style.display = e.nvidia ? '' : 'none';
   etiqueta($('t-cuda'), e.cuda, 'instalado', 'não instalado', 'info');
   const p = e.progresso || {}, ocupado = !!p.ocupado;
-  for (const b of ['whisper', 'embeddings', 'cuda']) $('b-' + b).disabled = ocupado || e[b];
+  for (const b of ['whisper', 'chamado', 'embeddings', 'cuda']) $('b-' + b).disabled = ocupado || e[b];
   $('prog').style.width = (p.pct || 0) + '%';
   $('prog-texto').textContent = p.erro ? 'Falhou: ' + p.erro + ' (clique em Baixar para tentar de novo)' : ocupado ? (p.fase || '...') : (p.fase === 'pronto' ? 'pronto' : 'nenhum download em andamento');
   $('estado-chaves').textContent = (e.tem_anthropic ? '✓ chave da Anthropic salva' : '✗ falta a chave da Anthropic') + ' · ' + (e.tem_eleven ? '✓ chave da ElevenLabs salva' : 'sem ElevenLabs (voz do Windows)');
@@ -91,13 +95,14 @@ setInterval(atualizar, 1500); atualizar();
 
 $('b-salvar').addEventListener('click', async () => {
   const corpo = { nome: $('k-nome').value, tratamento: $('k-trat').value, elevenlabs_voice_id: $('k-voz').value };
+  if ($('k-deepseek').value.trim()) corpo.deepseek_api_key = $('k-deepseek').value.trim();
   if ($('k-anthropic').value.trim()) corpo.anthropic_api_key = $('k-anthropic').value.trim();
   if ($('k-eleven').value.trim()) corpo.elevenlabs_api_key = $('k-eleven').value.trim();
   const r = await post('/api/configurar/salvar', corpo);
   $('r-salvar').textContent = r.ok ? 'Salvo. Os campos de chave foram esvaziados por segurança.' : ('Não salvou: ' + (r.erro || 'erro'));
-  if (r.ok) { $('k-anthropic').value = ''; $('k-eleven').value = ''; atualizar(); }
+  if (r.ok) { $('k-anthropic').value = ''; $('k-eleven').value = ''; $('k-deepseek').value = ''; atualizar(); }
 });
-for (const item of ['whisper', 'embeddings', 'cuda']) $('b-' + item).addEventListener('click', async () => { await post('/api/configurar/baixar', { item }); atualizar(); });
+for (const item of ['whisper', 'chamado', 'embeddings', 'cuda']) $('b-' + item).addEventListener('click', async () => { await post('/api/configurar/baixar', { item }); atualizar(); });
 $('b-reiniciar').addEventListener('click', async () => {
   $('b-reiniciar').disabled = true; $('r-reiniciar').textContent = 'Reiniciando...';
   await post('/api/configurar/reiniciar');

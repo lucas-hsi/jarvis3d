@@ -15,6 +15,7 @@ import re
 from pathlib import Path
 
 import arquivos
+import terminal
 import uia
 import windows_ctl
 from navegador import RISCO_ACAO
@@ -27,6 +28,7 @@ def _def(nome, descricao, props, req):
 
 def definicoes() -> list[dict]:
     return [
+        terminal.DEFINICAO,
         _def("listar_pasta", "Lista o conteúdo de uma pasta liberada (Downloads, Área de Trabalho, Documentos ou um caminho dentro delas).",
              {"pasta": {"type": "string"}}, ["pasta"]),
         _def("organizar_pasta", "Organiza os arquivos soltos de uma pasta liberada em subpastas por tipo (Imagens, PDFs, Documentos...). Mostra o plano e PEDE CONFIRMAÇÃO ao usuário antes de mover. Nunca apaga nada e dá para desfazer.",
@@ -87,6 +89,7 @@ ROTULOS = {
                               "mostrar_area_de_trabalho", "bloquear_tela")},
     **{n: "CONTROLE" for n in ("iniciar_controle", "clicar", "digitar", "pressionar_teclas", "rolar", "janela_acao")},
     "janela_ver": "JANELA",
+    "terminal_executar": "TERMINAL",
 }
 NOMES = set(ROTULOS)
 CONTROLE = {"iniciar_controle", "clicar", "digitar", "pressionar_teclas", "rolar", "janela_acao"}
@@ -103,6 +106,8 @@ def _texto(entrada: dict, campo: str) -> str:
 async def executar(nome: str, entrada: dict, config: dict, sessao, ver_tela) -> tuple[list | str, bool]:
     """Devolve (conteúdo, deu_erro). `ver_tela` é injetado para não haver import circular."""
     try:
+        if nome == "terminal_executar":
+            return await terminal.executar(entrada, sessao), False
         if nome == "janela_ver":
             return await uia.ver(str(entrada.get("titulo") or "")), False
         if nome in CONTROLE:

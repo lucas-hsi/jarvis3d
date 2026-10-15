@@ -368,9 +368,75 @@ def _despejar(audio: np.ndarray, rotulo: str):
         velho.unlink(missing_ok=True)
 
 
+ARQUIVOS_CHAMADO = ("hey_jarvis_v0.1.onnx", "melspectrogram.onnx", "embedding_model.onnx")
+
+
+def pasta_chamado() -> Path:
+    return caminhos.DADOS / "memoria" / "modelos" / "voz"
+
+
+class Chamado:
+    """Palavra de ativação LOCAL ("hey Jarvis", modelo openWakeWord em ONNX, ~2 ms por 80 ms de áudio na CPU). Não substitui o nome dito
+    (que o Whisper continua achando): soma, e responde mesmo quando a transcrição erra o nome."""
+
+    def __init__(self, limiar: float = 0.5):
+        from openwakeword.model import Model
+        d = str(pasta_chamado()) + os.sep
+        self.m = Model(wakeword_models=[d + ARQUIVOS_CHAMADO[0]], inference_framework="onnx",
+                       melspec_model_path=d + ARQUIVOS_CHAMADO[1], embedding_model_path=d + ARQUIVOS_CHAMADO[2])
+        self.limiar = limiar
+        self.buf = np.zeros(0, np.int16)
+        self.ultimo = 0.0
+
+    @classmethod
+    def criar(cls, limiar: float = 0.5):
+        try:
+            if all((pasta_chamado() / a).exists() for a in ARQUIVOS_CHAMADO):
+                return cls(limiar)
+        except Exception as e:
+            print(f"[jarvis] palavra de ativação indisponível ({type(e).__name__})", flush=True)
+        return None
+
+    def alimentar(self, pcm: np.ndarray) -> float | None:
+        self.buf = np.concatenate([self.buf, (np.clip(pcm, -1, 1) * 32767).astype(np.int16)])
+        pico = 0.0
+        while len(self.buf) >= 1280:
+            bloco, self.buf = self.buf[:1280], self.buf[1280:]
+            pico = max(pico, max(self.m.predict(bloco).values()))
+        agora = time.monotonic()
+        if pico >= self.limiar and agora - self.ultimo > 2.5:
+            self.ultimo = agora
+            return float(pico)
+        return None
+
+
+PALAVRAS_PENDENTES = {"e", "que", "de", "do", "da", "dos", "das", "no", "na", "para", "pra", "com", "mas", "ou", "a", "o", "um", "uma", "se", "porque", "quando",
+                      "como", "em", "por", "ao", "aos", "entao", "tambem", "depois", "tipo", "ai", "jarvis"}
+ESPERA_CONTINUACAO_S = 1.1
+
+
+def texto_incompleto(texto: str) -> bool:
+    """Parece que a pessoa parou NO MEIO da frase (termina em vírgula, conjunção/preposição, ou só o nome "Jarvis")?"""
+    t = (texto or "").strip()
+    if not t:
+        return False
+    if t.endswith((",", ":", ";", "-", "—")):
+        return True
+    palavras = _norm(t)
+    if not palavras:
+        return False
+    return palavras[-1] in PALAVRAS_PENDENTES and not t.endswith(("?", "!"))
+
+
+def texto_completo(texto: str) -> bool:
+    t = (texto or "").strip()
+    return t.endswith((".", "?", "!", "…")) and not texto_incompleto(t) and len(_norm(t)) >= 2
+
+
 class SessaoSTT:
-    def __init__(self, transcritor: Transcritor, emitir, fim_ms: int = 480, registrar_metrica=None, sensibilidade: str = "media"):
+    def __init__(self, transcritor: Transcritor, emitir, fim_ms: int = 480, registrar_metrica=None, sensibilidade: str = "media", chamado: "Chamado | None" = None):
         self.t = transcritor
+        self.chamado = chamado
         self.emitir = emitir                       # async: emitir(dict)
         self.seg = Segmentador(fim_ms=fim_ms, sensibilidade=sensibilidade)
         self.ligado = False
@@ -379,6 +445,9 @@ class SessaoSTT:
         self._pendentes = 0
         self._spec: dict | None = None             # transcrição especulativa em andamento: {"tarefa": Task, "valida": bool}
         self.ao_iniciar = None                     # async: chamado quando uma fala COMEÇA (aquece as conexões de rede)
+        self._seguro: dict | None = None           # fala que parece cortada no meio: espera ~1 s para juntar com a continuação
+        self.continuacao_s = ESPERA_CONTINUACAO_S
+        self._cadeia = None
 
     def ligar(self, ligado: bool):
         if ligado == self.ligado:
@@ -393,9 +462,18 @@ class SessaoSTT:
         self.seg.falando(sim)
 
     async def alimentar(self, dados: bytes):
-        if not self.ligado or not self.t.pronto or len(dados) < 2:
+        if not self.ligado or len(dados) < 2:
             return
         pcm = np.frombuffer(dados[: len(dados) // 2 * 2], dtype="<i2").astype(np.float32) / 32768.0
+        if self.chamado is not None:
+            try:
+                pontuacao = self.chamado.alimentar(pcm)
+            except Exception:
+                pontuacao = None
+            if pontuacao:
+                await self.emitir({"tipo": "chamado", "pontuacao": round(pontuacao, 2)})
+        if not self.t.pronto:
+            return
         for ev in self.seg.alimentar(pcm):
             tipo = ev[0]
             if tipo == "inicio":
@@ -403,7 +481,9 @@ class SessaoSTT:
                 if self.ao_iniciar:
                     asyncio.get_running_loop().create_task(self.ao_iniciar())
             elif tipo == "pre-fim":                    # silêncio de 240 ms: já começa a transcrever (se a fala não voltar, o texto sai pronto)
-                self._spec = {"tarefa": asyncio.get_running_loop().create_task(self._transcrever(ev[1])), "valida": True}
+                tarefa = asyncio.get_running_loop().create_task(self._transcrever(ev[1]))
+                self._spec = {"tarefa": tarefa, "valida": True, "audio": ev[1], "usada": False}
+                tarefa.add_done_callback(lambda t, spec=self._spec: asyncio.get_running_loop().create_task(self._spec_pronta(spec, t)))
             elif tipo == "retomou":
                 if self._spec:
                     self._spec["valida"] = False
@@ -416,7 +496,29 @@ class SessaoSTT:
             elif tipo == "fim":
                 await self.emitir({"tipo": "vad", "fala": False, "transcrevendo": True})
                 spec, self._spec = self._spec, None
-                asyncio.get_running_loop().create_task(self._concluir(spec, ev[1], ev[2], ev[3]))
+                if spec and spec.get("usada"):
+                    continue                              # já foi entregue antes (fim antecipado pelo texto)
+                anterior = self._cadeia                 # as falas são concluídas EM ORDEM (uma continuação nunca passa na frente da fala que ela completa)
+                self._cadeia = asyncio.get_running_loop().create_task(self._concluir(spec, ev[1], ev[2], ev[3], anterior))
+
+    async def _spec_pronta(self, spec: dict, tarefa):
+        """A transcrição especulativa terminou. Se a frase está COMPLETA (termina em ponto) e a pessoa continua calada, entrega já, sem esperar o resto do silêncio."""
+        try:
+            r = tarefa.result()
+        except Exception:
+            return
+        if not r or not r["texto"] or spec is not self._spec or not spec["valida"] or spec["usada"] or self._seguro:
+            return
+        if not texto_completo(r["texto"]) or not self.seg.dentro or self.seg.silencio < self.seg.spec_q:
+            return
+        spec["usada"] = True
+        audio = spec["audio"]
+        dur = int(len(audio) / TAXA * 1000)
+        nivel = float(np.percentile(self.seg.niveis, 90)) if self.seg.niveis else -60.0
+        self.seg.reiniciar()
+        self._spec = None
+        await self.emitir({"tipo": "vad", "fala": False, "transcrevendo": True})
+        await self._concluir({"tarefa": tarefa, "valida": True}, audio, dur, nivel)
 
     async def _transcrever(self, audio: np.ndarray):
         if self._pendentes >= 3:                   # fila cheia: a máquina não está dando conta; descarta em vez de atrasar tudo
@@ -432,7 +534,25 @@ class SessaoSTT:
             self._pendentes -= 1
         return {"texto": texto, "confianca": confianca, "motivo": motivo, "ms": round((time.perf_counter() - t0) * 1000)}
 
-    async def _concluir(self, spec, audio: np.ndarray, duracao_ms: int, nivel_db: float):
+    async def _soltar_seguro(self, seguro: dict):
+        await asyncio.sleep(self.continuacao_s)
+        while self._seguro is seguro and self.seg.dentro:     # ele está falando de novo agora: espera terminar para juntar
+            await asyncio.sleep(0.3)
+        if self._seguro is seguro:
+            self._seguro = None
+            await self._entregar(seguro["r"], seguro["audio"], seguro["dur"], seguro["nivel"], seguro["spec"])
+
+    async def _concluir(self, spec, audio: np.ndarray, duracao_ms: int, nivel_db: float, anterior=None):
+        if anterior is not None and not anterior.done():
+            try:
+                await anterior
+            except Exception:
+                pass
+        seguro, self._seguro = self._seguro, None
+        if seguro:                                   # continuação de uma fala cortada no meio: junta os dois trechos e transcreve de novo
+            audio = np.concatenate([seguro["audio"], np.zeros(int(0.25 * TAXA), np.float32), audio])
+            duracao_ms += seguro["dur"] + 250
+            spec = None
         if spec and spec["valida"]:
             r = await spec["tarefa"]                # a transcrição especulativa já estava rodando: normalmente já terminou
             especulativa = True
@@ -441,6 +561,14 @@ class SessaoSTT:
             especulativa = False
         if r is None:
             return
+        if r["texto"] and texto_incompleto(r["texto"]) and duracao_ms < 10000 and not seguro:
+            seg = {"r": r, "audio": audio, "dur": duracao_ms, "nivel": nivel_db, "spec": especulativa}
+            self._seguro = seg                       # parece que ele vai continuar: espera ~1 s antes de responder
+            asyncio.get_running_loop().create_task(self._soltar_seguro(seg))
+            return
+        await self._entregar(r, audio, duracao_ms, nivel_db, especulativa)
+
+    async def _entregar(self, r, audio: np.ndarray, duracao_ms: int, nivel_db: float, especulativa: bool):
         if self.registrar_metrica:
             self.registrar_metrica({"stt_audio_ms": duracao_ms, "stt_transcricao_ms": r["ms"]})
         if r["texto"]:

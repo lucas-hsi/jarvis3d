@@ -12,3 +12,4 @@ uiautomation
 fastembed
 faster-whisper>=1.0.3
 huggingface-hub>=0.24
+openwakeword>=0.6.0

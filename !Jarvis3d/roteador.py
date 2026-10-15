@@ -18,12 +18,12 @@ GRUPOS_ORDEM = ("nucleo", "arquivos", "pc", "navegador", "google", "camera", "in
 NUCLEO = {
     "pesquisar_web", "ler_pagina", "abrir_site", "ver_tela", "noticias", "abrir_programa", "consultar_cofre", "ler_nota",
     "controlar_volume", "controlar_midia", "lembrar", "buscar_memoria", "esquecer_memoria", "anotar_no_cofre",
-    "acrescentar_no_cofre", "trilha_sonora", "encerrar_conversa", "dormir", "habilitar_ferramentas", "briefing",
+    "acrescentar_no_cofre", "trilha_sonora", "encerrar_conversa", "dormir", "habilitar_ferramentas", "briefing", "pensar_fundo",
 }
 ARQUIVOS = {"listar_pasta", "organizar_pasta", "mover_itens", "renomear_item", "criar_pasta", "mover_para_lixo",
             "desfazer_organizacao", "abrir_pasta"}
 PC = {"listar_janelas", "gerenciar_janela", "mostrar_area_de_trabalho", "bloquear_tela", "iniciar_controle", "clicar",
-      "digitar", "pressionar_teclas", "rolar", "janela_ver", "janela_acao"}
+      "digitar", "pressionar_teclas", "rolar", "janela_ver", "janela_acao", "terminal_executar"}
 CAMERA = {"ver_camera", "modo_gravacao"}
 NAVEGADOR_EXTRA = {"youtube_buscar", "video_controle"}
 
@@ -63,7 +63,7 @@ GATILHOS = {
     "arquivos": re.compile(r"pasta|arquivo|download|documento|organiz|renome|lixeira|lixo|desfaz|\bmov[ae]|imagens|\bpdf|baixad"),
     "pc": re.compile(r"janela|minimiz|maximiz|\bfech|clic|digit|escrev|\btecla|atalho|mouse|\brol(e|ar)|desktop|area de trabalho|"
                      r"bloque|\btela|programa|aplicativ|\bapp\b|botao|\bmenu|instal|configurac|painel de controle|abr[ae]|"
-                     r"word|excel|bloco de notas|explorador|calculadora|whatsapp|discord|spotify|obs\b|vscode|terminal"),
+                     r"word|excel|bloco de notas|explorador|calculadora|whatsapp|discord|spotify|obs\b|vscode|terminal|comando|powershell|\bcmd\b|\bpip\b|\bnpm\b|\bgit\b|executa|roda o|instala"),
     "navegador": re.compile(r"youtube|music|\bsom\b|toc[ae]|toque|video|\bpul[ae]|proxim|anterior|pausa|continu|anunci|\bsite|pagina|"
                             r"navegador|\baba|pesquis|google|\blink|login|entra |compr|playlist|letra|\bclip|\bbusca|procura|"
                             r"mercado livre|olx|amazon|instagram|facebook|linkedin|\bweb\b|internet|\bhttp|\.com"),

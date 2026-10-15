@@ -19,6 +19,7 @@ from pathlib import Path
 import caminhos
 
 # versões testadas com o ctranslate2 do Jarvis (as mesmas do ambiente de desenvolvimento)
+URL_CHAMADO = "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/"
 CUDA_PACOTES = [("nvidia-cublas-cu12", "12.9.2.10"), ("nvidia-cuda-nvrtc-cu12", "12.9.86"), ("nvidia-cudnn-cu12", "9.27.0.42")]
 PROGRESSO = {"item": "", "fase": "", "pct": 0.0, "erro": "", "ocupado": False, "feito": []}
 _trava = threading.Lock()
@@ -46,6 +47,7 @@ def estado() -> dict:
     import stt
     return {
         "whisper": stt.modelo_em_disco(stt.MODELO_PADRAO),
+        "chamado": all((stt.pasta_chamado() / a).exists() for a in stt.ARQUIVOS_CHAMADO),
         "embeddings": any((caminhos.DADOS / "memoria" / "modelos").glob("models--*MiniLM*")),
         "nvidia": tem_nvidia(), "cuda": cuda_instalado(),
         "progresso": dict(PROGRESSO),
@@ -138,9 +140,21 @@ def _instalar_embeddings():
     TextEmbedding(model_name=semantica.MODELO_PADRAO, cache_dir=str(destino))
 
 
+def _instalar_chamado():
+    import stt
+    pasta = stt.pasta_chamado()
+    pasta.mkdir(parents=True, exist_ok=True)
+    for i, nome in enumerate(stt.ARQUIVOS_CHAMADO):
+        _definir(fase=f"baixando {nome}", pct=round(100 * i / len(stt.ARQUIVOS_CHAMADO), 1))
+        req = urllib.request.Request(URL_CHAMADO + nome, headers={"User-Agent": "Jarvis-instalador"})
+        with urllib.request.urlopen(req, timeout=60) as r, open(pasta / (nome + ".parte"), "wb") as f:
+            shutil.copyfileobj(r, f)
+        (pasta / (nome + ".parte")).replace(pasta / nome)
+
+
 def baixar(item: str) -> bool:
     """Começa o download em segundo plano. Devolve False se já há um em andamento ou o item é desconhecido."""
-    rotinas = {"whisper": _instalar_whisper, "embeddings": _instalar_embeddings, "cuda": _instalar_cuda}
+    rotinas = {"chamado": _instalar_chamado, "whisper": _instalar_whisper, "embeddings": _instalar_embeddings, "cuda": _instalar_cuda}
     if item not in rotinas or not _trava.acquire(blocking=False):
         return False
 

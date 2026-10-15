@@ -120,7 +120,7 @@ def definicoes(programas: dict, tem_cofre: bool) -> list[dict]:
 def descrever(nome: str, entrada: dict) -> tuple[str, str]:
     """Rótulo curto para o painel de atividade: (tipo, detalhe)."""
     detalhe = entrada.get("consulta") or entrada.get("url") or entrada.get("tema") \
-        or entrada.get("busca") or entrada.get("nota") or entrada.get("programa")         or entrada.get("pasta") or entrada.get("pasta_origem") or entrada.get("pasta_pai") or entrada.get("titulo")         or entrada.get("objetivo") or entrada.get("acao") or entrada.get("combinacao") or entrada.get("texto") or ""
+        or entrada.get("busca") or entrada.get("nota") or entrada.get("programa")         or entrada.get("pasta") or entrada.get("pasta_origem") or entrada.get("pasta_pai") or entrada.get("titulo")         or entrada.get("objetivo") or entrada.get("acao") or entrada.get("combinacao") or entrada.get("comando") or entrada.get("texto") or ""
     rotulos = {
         "pesquisar_web": "PESQUISA", "ler_pagina": "LEITURA", "abrir_site": "ABRINDO",
         "ver_tela": "VISÃO", "noticias": "NOTÍCIAS", "abrir_programa": "PROGRAMA",

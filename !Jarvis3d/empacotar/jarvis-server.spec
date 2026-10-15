@@ -17,7 +17,7 @@ binarios, ocultos = [], [
     "keyring.backends.Windows", "win32ctypes.core", "comtypes.client",
 ]
 for pacote in ("faster_whisper", "ctranslate2", "onnxruntime", "fastembed", "tokenizers", "uiautomation", "comtypes", "sounddevice",
-               "playwright", "certifi", "av", "anthropic", "tiktoken_ext"):
+               "playwright", "certifi", "av", "anthropic", "tiktoken_ext", "openwakeword"):
     try:
         d, b, h = collect_all(pacote)
         datas += d; binarios += b; ocultos += h

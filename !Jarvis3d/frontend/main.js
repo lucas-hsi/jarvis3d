@@ -753,6 +753,12 @@
             case 'midia': midiaAtiva = !!msg.ativa; break;
             case 'capturar_camera': capturarCamera(msg); break;
             case 'tocar_musica': if (musicaNaAbertura) tocarMusica(); if (!musicaNaAbertura || !temMusica) Sfx.tocar('ativacao'); break;
+            case 'chamado':                                          // "hey Jarvis" detectado pelo modelo local: abre a conversa e interrompe se ele estava falando
+                if (estado === 'falando' || estado === 'pensando') interromper();
+                conversaEncerrada = false; janelaAte = performance.now() + janelaConversaMs;
+                Sfx.tocar('recebi'); if (window.Acoes) Acoes.onda(0.5);
+                break;
+            case 'tela_ao_vivo': { const p = $('pill-tela'); if (p) p.classList.toggle('on', !!msg.ativo); break; }
             case 'conversa': if (msg.ativa === false) { conversaEncerrada = true; janelaAte = 0; } break;   // tchau / me aguarda
             case 'direcao_iniciar': iniciarDirecao(msg); break;
             case 'direcao_parar': pararDirecao(false, msg.motivo); break;
@@ -902,6 +908,7 @@
     });
 
     document.querySelector('.status-pill').addEventListener('click', abrirConversa);
+    if ($('pill-tela')) $('pill-tela').addEventListener('click', () => enviar({ tipo: 'tela_ao_vivo', ativo: !$('pill-tela').classList.contains('on') }));
     document.querySelector('.status-pill').style.cursor = 'pointer';
 
     function alternarMudo() {
