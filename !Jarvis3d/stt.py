@@ -72,7 +72,7 @@ PRESETS = {
     "media": dict(snr_liga=9.0,  abs_liga=-48.0, snr_desliga=5.0, abs_desliga=-53.0, abs_pico=-44.0, razao_voz=0.20, planura=0.52),
     "alta":  dict(snr_liga=7.0,  abs_liga=-52.0, snr_desliga=4.0, abs_desliga=-56.0, abs_pico=-47.0, razao_voz=0.16, planura=0.58),
 }
-EXTRA_FALANDO_DB = 9.0                        # enquanto o Jarvis fala, tudo precisa ser 9 dB mais forte (eco residual dos alto-falantes)
+EXTRA_FALANDO_DB = 6.0                       # enquanto o Jarvis fala, tudo precisa ser 6 dB mais forte (eco residual dos alto-falantes)
 
 # Registro em memória (nunca em disco) das últimas falas ouvidas e o que se decidiu: serve para entender "por que ele me chamou?"
 RECENTES: deque = deque(maxlen=60)

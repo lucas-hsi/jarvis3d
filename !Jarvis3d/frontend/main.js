@@ -542,17 +542,42 @@
     const falandoAgora = () => tocando || (estado === 'falando');
     const podeEscutarFalando = () => interromperPorVoz && !gravando && !mudo && !confirmacao;
 
+    // Fluxo de conversa: assim que o servidor ouve VOCÊ começar a falar por cima, a voz dele cai para quase nada (sem esperar o
+    // Whisper); se for você mesmo (transcrição ou fala contínua), ele para; se for eco/ruído, a voz volta.
+    let abafado = false, tAbafar = null, tCortar = null;
+    const ganhoNormal = () => (MUDO ? 0 : 1);
+    function abafarVoz(sim) {
+        clearTimeout(tAbafar); clearTimeout(tCortar);
+        if (!saidaMestre) return;
+        if (sim === abafado) return;
+        abafado = sim;
+        saidaMestre.gain.cancelScheduledValues(ctx.currentTime);
+        saidaMestre.gain.setTargetAtTime(sim ? ganhoNormal() * 0.1 : ganhoNormal(), ctx.currentTime, sim ? 0.03 : 0.08);
+        if (sim) {
+            tAbafar = setTimeout(() => abafarVoz(false), 5000);                 // nenhuma decisão em 5 s: era ruído
+            tCortar = setTimeout(() => { if (abafado && vadAtivo && falandoAgora()) cortarPorFalaContinua(); }, 1100);
+        }
+    }
+    let vadAtivo = false;
+    function cortarPorFalaContinua() {                  // você segue falando >1 s por cima dele: é uma interrupção de verdade
+        ultimaInterrupcaoEm = performance.now();
+        interromper();
+        abafarVoz(false);
+    }
+
     function tratarDuranteFala(item) {
         const falado = legendaJarvis.join(' ');
         const d = Interrupcao.decidir({
             texto: item.transcript, final: item.isFinal, confianca: item.confidence || 0, falado,
             exigeNome: midiaAtiva || !!musica,
+            minNovasFinal: abafado ? 2 : 3,
         });
-        if (d.acao !== 'interromper') return false;
+        if (d.acao !== 'interromper') { if (item.isFinal && d.motivo !== 'sem o nome') abafarVoz(false); return null; }
         ultimaInterrupcaoEm = performance.now();
         interromper();
+        abafarVoz(false);
         if (d.parar) mostrarVoce(item.transcript.trim(), false);
-        return true;
+        return d;
     }
 
     // ------------------------------------------------------------ métricas do lado do navegador (o servidor não vê esse tempo)
@@ -575,8 +600,10 @@
         for (const r of lista) {
             const agora = performance.now();
             if (falandoAgora() && !confirmacao) {                   // Jarvis falando: eco ou interrupção?
-                if (podeEscutarFalando()) tratarDuranteFala(r);
-                continue;
+                if (!podeEscutarFalando()) continue;
+                const d = tratarDuranteFala(r);
+                // você falou por cima: a frase que o interrompeu JÁ É o seu próximo pedido (não precisa repetir)
+                if (!(d && r.isFinal && !d.parar)) continue;
             }
             if (!r.isFinal) { T.ultimoParcialEm = agora; }
             if (r.isFinal) {
@@ -795,6 +822,9 @@
                 break;
             case 'vad':                                            // o servidor ouviu você começar/parar de falar
                 document.body.dataset.vad = msg.fala ? '1' : '0';
+                vadAtivo = !!msg.fala;
+                if (!msg.fala && msg.descartado) abafarVoz(false);          // era ruído/eco: a voz dele volta
+                if (msg.fala && falandoAgora() && !confirmacao && podeEscutarFalando() && !midiaAtiva && !musica) abafarVoz(true);
                 if (msg.fala && !falandoAgora() && !confirmacao) mostrarVoce('…', true);
                 break;
         }
