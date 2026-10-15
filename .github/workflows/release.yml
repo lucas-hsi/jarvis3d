@@ -13,7 +13,41 @@ permissions:
   contents: write
 
 jobs:
+  testes:
+    # Os testes que não precisam de chaves, câmera nem modelos: se algum falhar, NENHUMA release é publicada.
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: '!Jarvis3d'
+    env:
+      JARVIS_HOME: ${{ runner.temp }}\\jarvis-teste
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Dependências
+        run: python -m pip install -r empacotar/requirements-lock.txt
+      - name: Testes de Python
+        shell: pwsh
+        run: |
+          $falhas = @()
+          foreach ($t in 'teste_intencoes','teste_politica','teste_roteador','teste_terminal','teste_proativo','teste_mouse_ar','teste_mcp','teste_fim_texto') {
+            python -X utf8 "scripts/$t.py"
+            if ($LASTEXITCODE -ne 0) { $falhas += $t }
+          }
+          if ($falhas.Count) { Write-Error ("Falharam: " + ($falhas -join ', ')); exit 1 }
+      - name: Testes de JavaScript (gestos e interrupção)
+        run: |
+          node scripts/teste_gestos.js
+          node scripts/teste_interrupcao.js
+
   windows:
+    needs: testes
     runs-on: windows-latest
     defaults:
       run:

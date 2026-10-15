@@ -56,9 +56,17 @@
   <p class="mini" style="margin-top:0">O reconhecimento de voz roda no seu computador (nada do que você fala vai para a nuvem para ser transcrito). Estes arquivos não vêm dentro do instalador por serem grandes.</p>
   <div class="item"><div><b>Reconhecimento de voz (Whisper)</b><div class="mini">~480 MB · necessário para falar com o Jarvis</div></div><div><span id="t-whisper" class="tag info">—</span> <button id="b-whisper">Baixar</button></div></div>
   <div class="item"><div><b>Palavra de ativação "hey Jarvis"</b><div class="mini">~4 MB · opcional · chama o Jarvis mesmo quando a transcrição erra o nome</div></div><div><span id="t-chamado" class="tag info">—</span> <button id="b-chamado">Baixar</button></div></div>
+  <div class="item"><div><b>Voz local gratuita (reserva)</b><div class="mini">~120 MB · opcional · o Jarvis fala por ela quando a ElevenLabs falha ou acaba o crédito (português do Brasil, sem custo)</div></div><div><span id="t-vozlocal" class="tag info">—</span> <button id="b-vozlocal">Baixar</button></div></div>
   <div class="item"><div><b>Memória por significado</b><div class="mini">~220 MB · opcional (sem ela a busca é por palavras)</div></div><div><span id="t-embeddings" class="tag info">—</span> <button id="b-embeddings">Baixar</button></div></div>
   <div class="item" id="linha-cuda"><div><b>Aceleração pela placa NVIDIA</b><div class="mini">~1,1 GB · opcional · deixa a voz bem mais rápida (sem ela usa o processador)</div></div><div><span id="t-cuda" class="tag info">—</span> <button id="b-cuda">Baixar</button></div></div>
   <div class="linha"><div class="barra"><i id="prog"></i></div><span class="mini" id="prog-texto">nenhum download em andamento</span></div>
+</div>
+
+<div class="card">
+  <h2>Ferramentas externas (MCP) · avançado</h2>
+  <p class="mini" style="margin-top:0">Liga programas que dão novas ferramentas ao Jarvis (arquivos, GitHub, Notion, bancos, casa inteligente...). Cada servidor roda como programa seu. Ferramentas que só leem rodam direto; as que alteram algo pedem a sua confirmação.</p>
+  <textarea id="mcp-json" spellcheck="false" style="width:100%; min-height:130px; background:#08121a; color:var(--txt); border:1px solid #1f4a60; border-radius:8px; padding:10px; font:12.5px Consolas,monospace" placeholder='{"servidores": {"arquivos": {"comando": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "C:/Users/voce/Documents"]}}}'></textarea>
+  <div class="linha"><button id="b-mcp">Salvar e conectar</button><span class="mini" id="r-mcp"></span></div>
 </div>
 
 <div class="card">
@@ -78,12 +86,13 @@ async function atualizar() {
   let e;
   try { e = await (await fetch('/api/configurar/estado')).json(); } catch (_) { return; }
   etiqueta($('t-whisper'), e.whisper, 'instalado', 'falta', 'erro');
+  etiqueta($('t-vozlocal'), e.vozlocal, 'instalado', 'não instalado', 'info');
   etiqueta($('t-chamado'), e.chamado, 'instalado', 'não instalado', 'info');
   etiqueta($('t-embeddings'), e.embeddings, 'instalado', 'não instalado', 'info');
   $('linha-cuda').style.display = e.nvidia ? '' : 'none';
   etiqueta($('t-cuda'), e.cuda, 'instalado', 'não instalado', 'info');
   const p = e.progresso || {}, ocupado = !!p.ocupado;
-  for (const b of ['whisper', 'chamado', 'embeddings', 'cuda']) $('b-' + b).disabled = ocupado || e[b];
+  for (const b of ['whisper', 'chamado', 'vozlocal', 'embeddings', 'cuda']) $('b-' + b).disabled = ocupado || e[b];
   $('prog').style.width = (p.pct || 0) + '%';
   $('prog-texto').textContent = p.erro ? 'Falhou: ' + p.erro + ' (clique em Baixar para tentar de novo)' : ocupado ? (p.fase || '...') : (p.fase === 'pronto' ? 'pronto' : 'nenhum download em andamento');
   $('estado-chaves').textContent = (e.tem_anthropic ? '✓ chave da Anthropic salva' : '✗ falta a chave da Anthropic') + ' · ' + (e.tem_eleven ? '✓ chave da ElevenLabs salva' : 'sem ElevenLabs (voz do Windows)');
@@ -92,6 +101,11 @@ async function atualizar() {
   if (e.voz_id && !$('k-voz').value) $('k-voz').value = e.voz_id;
 }
 setInterval(atualizar, 1500); atualizar();
+fetch('/api/mcp').then((r) => r.json()).then((d) => { $('mcp-json').value = d.config || ''; }).catch(() => {});
+$('b-mcp').addEventListener('click', async () => {
+  const r = await post('/api/mcp/salvar', { config: $('mcp-json').value });
+  $('r-mcp').textContent = r.ok ? 'Conectado: ' + Object.entries(r.servidores).map(([n, s]) => n + ' (' + s.estado + ', ' + s.ferramentas.length + ' ferramentas)').join('; ') : (r.erro || 'Não salvou');
+});
 
 $('b-salvar').addEventListener('click', async () => {
   const corpo = { nome: $('k-nome').value, tratamento: $('k-trat').value, elevenlabs_voice_id: $('k-voz').value };
@@ -102,7 +116,7 @@ $('b-salvar').addEventListener('click', async () => {
   $('r-salvar').textContent = r.ok ? 'Salvo. Os campos de chave foram esvaziados por segurança.' : ('Não salvou: ' + (r.erro || 'erro'));
   if (r.ok) { $('k-anthropic').value = ''; $('k-eleven').value = ''; $('k-deepseek').value = ''; atualizar(); }
 });
-for (const item of ['whisper', 'chamado', 'embeddings', 'cuda']) $('b-' + item).addEventListener('click', async () => { await post('/api/configurar/baixar', { item }); atualizar(); });
+for (const item of ['whisper', 'chamado', 'vozlocal', 'embeddings', 'cuda']) $('b-' + item).addEventListener('click', async () => { await post('/api/configurar/baixar', { item }); atualizar(); });
 $('b-reiniciar').addEventListener('click', async () => {
   $('b-reiniciar').disabled = true; $('r-reiniciar').textContent = 'Reiniciando...';
   await post('/api/configurar/reiniciar');

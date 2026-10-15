@@ -17,3 +17,5 @@ pypdf
 python-docx
 openpyxl
 lxml
+mcp
+kokoro-onnx

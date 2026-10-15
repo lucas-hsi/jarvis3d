@@ -48,6 +48,7 @@ def estado() -> dict:
     return {
         "whisper": stt.modelo_em_disco(stt.MODELO_PADRAO),
         "chamado": all((stt.pasta_chamado() / a).exists() for a in stt.ARQUIVOS_CHAMADO),
+        "vozlocal": __import__("voz_local").disponivel(),
         "embeddings": any((caminhos.DADOS / "memoria" / "modelos").glob("models--*MiniLM*")),
         "nvidia": tem_nvidia(), "cuda": cuda_instalado(),
         "progresso": dict(PROGRESSO),
@@ -152,9 +153,31 @@ def _instalar_chamado():
         (pasta / (nome + ".parte")).replace(pasta / nome)
 
 
+def _instalar_vozlocal():
+    import voz_local
+    pasta = voz_local.pasta()
+    pasta.mkdir(parents=True, exist_ok=True)
+    for i, nome in enumerate(voz_local.ARQUIVOS):
+        alvo = pasta / nome
+        if alvo.exists():
+            continue
+        req = urllib.request.Request(voz_local.URL + nome, headers={"User-Agent": "Jarvis-instalador"})
+        with urllib.request.urlopen(req, timeout=60) as r, open(str(alvo) + ".parte", "wb") as f:
+            total = int(r.headers.get("Content-Length") or 0)
+            lido = 0
+            while True:
+                bloco = r.read(1 << 20)
+                if not bloco:
+                    break
+                f.write(bloco)
+                lido += len(bloco)
+                _definir(fase=f"baixando {nome} ({lido // (1 << 20)} de {total // (1 << 20)} MB)", pct=round(50 * i + (50 * lido / total if total else 0), 1))
+        (pasta / (nome + ".parte")).replace(alvo)
+
+
 def baixar(item: str) -> bool:
     """Começa o download em segundo plano. Devolve False se já há um em andamento ou o item é desconhecido."""
-    rotinas = {"chamado": _instalar_chamado, "whisper": _instalar_whisper, "embeddings": _instalar_embeddings, "cuda": _instalar_cuda}
+    rotinas = {"vozlocal": _instalar_vozlocal, "chamado": _instalar_chamado, "whisper": _instalar_whisper, "embeddings": _instalar_embeddings, "cuda": _instalar_cuda}
     if item not in rotinas or not _trava.acquire(blocking=False):
         return False
 

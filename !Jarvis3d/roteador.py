@@ -13,7 +13,7 @@ A ORDEM das ferramentas é estável (necessária para o cache de prompt acertar 
 import re
 import unicodedata
 
-GRUPOS_ORDEM = ("nucleo", "arquivos", "pc", "navegador", "google", "camera", "interface")
+GRUPOS_ORDEM = ("nucleo", "arquivos", "pc", "navegador", "google", "camera", "interface", "mcp")
 
 NUCLEO = {
     "pesquisar_web", "ler_pagina", "abrir_site", "ver_tela", "noticias", "abrir_programa", "consultar_cofre", "ler_nota",
@@ -34,6 +34,7 @@ DESCRICAO_GRUPOS = {
     "google": "Google Agenda, Gmail e Drive",
     "camera": "webcam (olhar roupa/objetos) e modo gravação de vídeo",
     "interface": "visual da tela do Jarvis (tema, painéis, layout, reator, efeitos)",
+    "mcp": "ferramentas externas do usuário (servidores MCP: Notion, GitHub, arquivos, bancos, casa inteligente...)",
 }
 
 
@@ -52,6 +53,8 @@ def grupo_de(nome: str) -> str:
         return "google"
     if nome.startswith("ui_"):
         return "interface"
+    if nome.startswith("mcp__"):
+        return "mcp"
     return "nucleo"          # ferramenta nova sem grupo: vai sempre (seguro)
 
 
