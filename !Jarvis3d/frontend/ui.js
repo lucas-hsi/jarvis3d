@@ -45,6 +45,7 @@
         }
         b.classList.toggle('cinema', !!estado.cinema);
         b.classList.toggle('moderno', estado.estilo !== 'matrix');
+        b.classList.toggle('laterais-off', !Object.values(estado.paineis).some(Boolean) || !!estado.cinema);       // sem painéis: aparece um botão fixo para trazê-los de volta
         if (window.Cena3D && Cena3D.ambiente) Cena3D.ambiente(estado.estilo !== 'matrix' ? 0.3 : 1);
         b.classList.toggle('sem-esq', !ESQUERDA.some((p) => estado.paineis[p]));
         b.classList.toggle('sem-dir', !DIREITA.some((p) => estado.paineis[p]));
@@ -110,7 +111,7 @@
 
     function definirEstilo(e) { estado.estilo = e === 'matrix' ? 'matrix' : 'moderno'; salvar(); aplicar(); }
     function alternarFoco() {                              // tecla B: só o centro <-> o que estava antes
-        const todosOff = !Object.values(estado.paineis).some(Boolean);
+        const todosOff = !Object.values(estado.paineis).some(Boolean) || !!estado.cinema;
         if (todosOff) { estado.paineis = { ...(estado.antesDoFoco || PRESETS.moderno.paineis) }; estado.cinema = false; }
         else { estado.antesDoFoco = { ...estado.paineis }; estado.paineis = tudo(false); }
         salvar(); aplicar(); if (window.Sfx) Sfx.tocar('ui');

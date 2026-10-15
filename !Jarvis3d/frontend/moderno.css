@@ -131,3 +131,8 @@ body.moderno .ac-chip { font-family: var(--fonte); font-size: 12px; letter-spaci
 body.moderno .ac-chip b { letter-spacing: .1em; }
 body.moderno .pill-gestos { font-family: var(--fonte); letter-spacing: .1em; background: rgba(255, 255, 255, .06); border-color: var(--borda-vidro); }
 body.moderno .ac-cartao, body.moderno .ac-barra span, body.moderno .ac-corpo { font-family: var(--fonte); }
+
+/* botão fixo para trazer os painéis de volta quando tudo está escondido (modo foco/cinema) */
+#btn-restaurar { position: fixed; top: 16px; right: 16px; z-index: 40; display: none; opacity: .55; }
+body.laterais-off #btn-restaurar { display: inline-flex; }
+#btn-restaurar:hover { opacity: 1; }

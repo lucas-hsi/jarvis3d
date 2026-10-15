@@ -71,5 +71,6 @@
     document.addEventListener('click', (e) => { if (!menu.hidden && !menu.contains(e.target) && e.target !== $('btn-layout')) alternarMenu(false); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !menu.hidden) alternarMenu(false); });
 
+    $('btn-restaurar').addEventListener('click', () => UI.alternarFoco());
     montarAtalhos();
 })();
