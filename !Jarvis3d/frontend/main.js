@@ -1056,6 +1056,7 @@
         $('clima-desc').textContent = c ? c.descricao : 'Sem dados';
         $('clima-extra').textContent = c ? `${c.cidade} · sensação ${c.sensacao}° · umidade ${c.umidade}% · vento ${c.vento} km/h` : '';
         $('i-modelo').textContent = p.modelo;
+        if ($('i-custo') && p.custo_usd !== undefined) $('i-custo').textContent = 'US$ ' + p.custo_usd.toFixed(3) + ' / ' + p.orcamento_usd.toFixed(2);
         $('i-voz').textContent = p.voz;
         if (p.local) {
             const cidade = (p.local.cidade || '').toUpperCase();

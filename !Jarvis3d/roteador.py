@@ -18,10 +18,10 @@ GRUPOS_ORDEM = ("nucleo", "arquivos", "pc", "navegador", "google", "camera", "in
 NUCLEO = {
     "pesquisar_web", "ler_pagina", "abrir_site", "ver_tela", "noticias", "abrir_programa", "consultar_cofre", "ler_nota",
     "controlar_volume", "controlar_midia", "lembrar", "buscar_memoria", "esquecer_memoria", "anotar_no_cofre",
-    "acrescentar_no_cofre", "trilha_sonora", "encerrar_conversa", "dormir", "habilitar_ferramentas", "briefing", "pensar_fundo",
+    "acrescentar_no_cofre", "trilha_sonora", "encerrar_conversa", "dormir", "habilitar_ferramentas", "briefing", "pensar_fundo", "modo_especialista", "pesquisa_profunda",
 }
 ARQUIVOS = {"listar_pasta", "organizar_pasta", "mover_itens", "renomear_item", "criar_pasta", "mover_para_lixo",
-            "desfazer_organizacao", "abrir_pasta"}
+            "desfazer_organizacao", "abrir_pasta", "ler_documento", "criar_documento", "buscar_documentos"}
 PC = {"listar_janelas", "gerenciar_janela", "mostrar_area_de_trabalho", "bloquear_tela", "iniciar_controle", "clicar",
       "digitar", "pressionar_teclas", "rolar", "janela_ver", "janela_acao", "terminal_executar"}
 CAMERA = {"ver_camera", "modo_gravacao"}
@@ -60,7 +60,7 @@ def _norm(t: str) -> str:
 
 
 GATILHOS = {
-    "arquivos": re.compile(r"pasta|arquivo|download|documento|organiz|renome|lixeira|lixo|desfaz|\bmov[ae]|imagens|\bpdf|baixad"),
+    "arquivos": re.compile(r"pasta|arquivo|download|documento|organiz|renome|lixeira|lixo|desfaz|\bmov[ae]|imagens|\bpdf|baixad|planilha|excel|\bword\b|docx|xlsx|relatorio|contrato|curriculo|resum[ae]|\bler\b|le o|onde (esta|ficou)|acha"),
     "pc": re.compile(r"janela|minimiz|maximiz|\bfech|clic|digit|escrev|\btecla|atalho|mouse|\brol(e|ar)|desktop|area de trabalho|"
                      r"bloque|\btela|programa|aplicativ|\bapp\b|botao|\bmenu|instal|configurac|painel de controle|abr[ae]|"
                      r"word|excel|bloco de notas|explorador|calculadora|whatsapp|discord|spotify|obs\b|vscode|terminal|comando|powershell|\bcmd\b|\bpip\b|\bnpm\b|\bgit\b|executa|roda o|instala"),

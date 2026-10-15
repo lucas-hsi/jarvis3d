@@ -1,7 +1,7 @@
 {
   "name": "jarvis-desktop",
   "productName": "Jarvis",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Jarvis: assistente de voz para Windows (casca Electron + servidor Python local).",
   "main": "main.js",
   "private": true,
