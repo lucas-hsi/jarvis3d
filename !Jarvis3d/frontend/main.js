@@ -758,6 +758,8 @@
                 conversaEncerrada = false; janelaAte = performance.now() + janelaConversaMs;
                 Sfx.tocar('recebi'); if (window.Acoes) Acoes.onda(0.5);
                 break;
+            case 'mouse_modo': { mouseNoAr = !!msg.ativo; if (window.Gestos) Gestos.mouse(mouseNoAr); const p = $('pill-mouse'); if (p) p.classList.toggle('on', mouseNoAr); break; }
+            case 'mouse_pedido': alternarMouse(!!msg.ativo); break;
             case 'tela_ao_vivo': { const p = $('pill-tela'); if (p) p.classList.toggle('on', !!msg.ativo); break; }
             case 'conversa': if (msg.ativa === false) { conversaEncerrada = true; janelaAte = 0; } break;   // tchau / me aguarda
             case 'direcao_iniciar': iniciarDirecao(msg); break;
@@ -944,6 +946,7 @@
     function tratarGesto(ev) {
         const g = ev.tipo;
         if (g === 'arrastar' || g === 'pinca_fim') return;
+        if (mouseNoAr) { if (g === 'palma') alternarMouse(false); return; }              // no mouse no ar a pinça é o clique: as ações de mídia ficam de fora
         if (g === 'palma') {
             if (estado === 'falando' || estado === 'pensando') { interromper(); chipGesto('palma: parar'); }
             else { armar(); Sfx.tocar('ui'); chipGesto('gestos armados (8 s)'); }
@@ -956,6 +959,29 @@
         if (g === 'punho') { alternarMudo(); chipGesto(mudo ? 'punho: microfone mudo' : 'punho: microfone ativo'); }
         else if (g.startsWith('deslizar') || g === 'pinca') enviar({ tipo: 'gesto', nome: g });      // o servidor faz a ação de mídia e devolve a etiqueta
     }
+    // ---- MOUSE NO AR: só o usuário liga (botão MOUSE ou voz). O servidor aplica o ponteiro, o clique, a rolagem e o zoom; ESC, palma parada ou desligar soltam tudo.
+    let mouseNoAr = false, ultimoMover = 0;
+    async function alternarMouse(ligar) {
+        if (!window.Gestos || !Gestos.disponivel()) { aviso('Gestos indisponíveis neste computador.', 3000); return; }
+        if (ligar === undefined) ligar = !mouseNoAr;
+        if (ligar && !Gestos.estado().ligado) await alternarGestos(true);
+        if (ligar && !Gestos.estado().ligado) return;
+        mouseNoAr = !!ligar && Gestos.mouse(true);
+        if (!ligar) Gestos.mouse(false);
+        enviar({ tipo: 'mouse_modo', ativo: mouseNoAr });
+        const p = $('pill-mouse'); if (p) p.classList.toggle('on', mouseNoAr);
+        aviso(mouseNoAr ? 'Mouse no ar ligado: a ponta do indicador move o ponteiro. Palma aberta parada, ESC ou o botão MOUSE desligam.' : 'Mouse no ar desligado.', 5000);
+    }
+    if (window.Gestos) {
+        Gestos.ao('mouse', (ev) => {
+            if (!mouseNoAr) return;
+            if (ev.tipo === 'mover') { const agora = performance.now(); if (agora - ultimoMover < 14) return; ultimoMover = agora; }
+            enviar({ tipo: 'mouse', acao: ev.tipo, x: ev.x, y: ev.y, passos: ev.passos });
+        });
+        $('pill-mouse').addEventListener('click', () => alternarMouse());
+    }
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && mouseNoAr) alternarMouse(false); });
+
     async function alternarGestos(ligar) {
         if (!window.Gestos || !Gestos.disponivel()) { aviso('Gestos indisponíveis neste computador.', 3000); return; }
         if (ligar === undefined) ligar = !Gestos.estado().ligado;

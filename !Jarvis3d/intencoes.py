@@ -35,7 +35,7 @@ def _numero(txt: str) -> int | None:
 def interpretar(texto: str, achar_programa) -> dict | None:
     """Devolve {'acao': ..., ...} ou None. `achar_programa(nome) -> nome_exibido | None` resolve nomes de programas instalados."""
     t = normalizar(texto)
-    if not t or len(t.split()) > 7:
+    if not t or (len(t.split()) > 7 and not re.match(r"(me )?(lembr|avis)", t)):
         return None
     if re.search(r"\b(e depois|e tambem|e entao|depois|alem disso)\b", t) or re.search(r"\be (abre|abra|toca|toque|pesquisa|manda|envia|escreve|digita|clica)\b", t):
         return None                                           # duas ações: deixa para o modelo
@@ -75,6 +75,20 @@ def interpretar(texto: str, achar_programa) -> dict | None:
         return {"acao": "ui", "nome": "ui_layout", "entrada": {"acao": "preset", "nome": "completo"}, "fala": "Modo completo."}
     if re.fullmatch(r"(modo|ativa o modo|liga o modo|entra no modo) cinema|cinema", t):
         return {"acao": "ui", "nome": "ui_layout", "entrada": {"acao": "preset", "nome": "cinema"}, "fala": "Modo cinema."}
+
+    # ---- lembrete rápido: "me lembra daqui a 10 minutos de tirar o bolo"
+    m = re.fullmatch(r"(me )?(lembr[ae]|avisa|avise)( me)? (daqui a|em|daqui) (\d{1,3}|um|uma|dois|duas|tres|cinco|dez|quinze|vinte|trinta|quarenta e cinco|sessenta) (minutos?|horas?|hora) (de|para|pra|que) (.{3,120})", t)
+    if m:
+        palavras = {"um": 1, "uma": 1, "dois": 2, "duas": 2, "tres": 3, "cinco": 5, "dez": 10, "quinze": 15, "vinte": 20, "trinta": 30, "quarenta e cinco": 45, "sessenta": 60}
+        n = int(m.group(5)) if m.group(5).isdigit() else palavras[m.group(5)]
+        minutos = n * (60 if m.group(6).startswith("hora") else 1)
+        return {"acao": "lembrete", "minutos": minutos, "texto": m.group(8).strip(), "fala": f"Combinado, te aviso em {n} {'hora' if m.group(6).startswith('hora') and n == 1 else 'horas' if m.group(6).startswith('hora') else 'minuto' if n == 1 else 'minutos'}."}
+
+    # ---- mouse no ar (o usuário liga/desliga POR VOZ; nunca pelo modelo)
+    if re.fullmatch(r"(ativa|ative|liga|ligue|inicia|inicie|habilita|habilite|comeca|comece)( o)? ?(mouse|cursor|ponteiro)( no ar| por gesto| com a mao| com gestos)?", t) or t in ("mouse no ar", "ativa mouse no ar"):
+        return {"acao": "mouse", "valor": True, "fala": "Mouse no ar ligado."}
+    if re.fullmatch(r"(desativa|desative|desliga|desligue|para|pare|encerra|encerre|termina|termine)( o)? ?(mouse|cursor|ponteiro)( no ar| por gesto| com a mao| com gestos)?", t):
+        return {"acao": "mouse", "valor": False, "fala": "Mouse no ar desligado."}
 
     # ---- hora
     if re.fullmatch(r"(que|qual a|qual e a|me diz a|me fala a|diz a|fala a)? ?(horas?)( sao| e| agora| tem| eh)?( agora)?|(que|qual)( horas?| e a hora| a hora)( sao| e)?( agora)?", t) or t in ("que horas sao", "que horas e", "horas", "que hora e"):

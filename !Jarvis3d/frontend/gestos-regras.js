@@ -157,5 +157,73 @@
         };
     }
 
-    return { umEuro, filtrarPontos, LIM, dist, tamanhoMao, dedosEstendidos, centroPalma, criarMao, criarCabeca, medidasCabeca };
+    // ------------------------------------------------------------------ MOUSE NO AR (só enquanto o usuário liga o modo)
+    // Uma mão: o ponteiro segue o meio entre as pontas do polegar e do indicador (não pula ao fechar a pinça); pinça = botão esquerdo (arrastar ícones
+    // é só manter a pinça e mover); polegar+médio = botão direito; dois dedos (V) subindo/descendo = rolar; punho = estaciona o ponteiro.
+    // Duas mãos em pinça se afastando/aproximando = zoom. Saídas em coordenadas 0..1 da TELA (a região útil da câmera é esticada para a tela inteira).
+    function criarMouse(opcoes = {}) {
+        const c = { x0: 0.2, x1: 0.8, y0: 0.15, y1: 0.78, fecha: 0.22, abre: 0.35, baixar_ms: 60, perdida_ms: 1200, rolar_passo: 0.5, zoom_passo: 0.55, dir_pausa_ms: 700, ...opcoes };
+        let baixo = false, pinca = false, fechouEm = 0, visto = 0, ultX = -1, ultY = -1;
+        let dirPress = false, dirAte = 0, scrollAcc = 0, scrollY = null, zoomBase = null, emZoom = false;
+        const lim = (v) => Math.max(0, Math.min(1, v));
+        const mapa = (x, y) => [lim((x - c.x0) / (c.x1 - c.x0)), lim((y - c.y0) / (c.y1 - c.y0))];
+        const soltarTudo = (ev) => { if (baixo) { baixo = false; ev.push({ tipo: 'soltar' }); } pinca = false; };
+        return {
+            reiniciar() { baixo = false; pinca = false; zoomBase = null; emZoom = false; scrollY = null; scrollAcc = 0; ultX = ultY = -1; },
+            ativo: () => ({ baixo, emZoom }),
+            atualizar(maos, t, asp = 16 / 9) {
+                const ev = [];
+                if (!maos || !maos.length) {
+                    if (t - visto > c.perdida_ms) { soltarTudo(ev); zoomBase = null; emZoom = false; scrollY = null; }
+                    return ev;
+                }
+                visto = t;
+                if (maos.length >= 2) {                                              // zoom: as duas mãos em pinça
+                    const info = maos.slice(0, 2).map((p) => { const tam = tamanhoMao(p, asp); return { razao: dist(p[4], p[8], asp) / tam, tam, m: { x: (p[4].x + p[8].x) / 2, y: (p[4].y + p[8].y) / 2 } }; });
+                    const ambas = info.every((i) => i.razao < (emZoom ? c.abre : c.fecha));
+                    if (ambas) {
+                        soltarTudo(ev);
+                        const d = Math.hypot((info[0].m.x - info[1].m.x) * asp, info[0].m.y - info[1].m.y) / ((info[0].tam + info[1].tam) / 2);
+                        if (zoomBase === null) { zoomBase = d; emZoom = true; return ev; }
+                        const passos = Math.trunc((d - zoomBase) / c.zoom_passo);
+                        if (passos) { ev.push({ tipo: 'zoom', passos }); zoomBase += passos * c.zoom_passo; }
+                        return ev;
+                    }
+                    if (emZoom) { emZoom = false; zoomBase = null; }
+                }
+                const p = maos[0];
+                const tam = tamanhoMao(p, asp), e = dedosEstendidos(p, asp);
+                const rI = dist(p[4], p[8], asp) / tam, rM = dist(p[4], p[12], asp) / tam;
+                const fator = lim((0.45 - rI) / (0.45 - c.fecha));
+                const px = p[8].x + (((p[4].x + p[8].x) / 2) - p[8].x) * fator, py = p[8].y + (((p[4].y + p[8].y) / 2) - p[8].y) * fator;
+
+                const punho = e.n === 0 && rI >= c.fecha;
+                const rolando = e.dedos[0] && e.dedos[1] && !e.dedos[2] && !e.dedos[3] && rI > 0.4;
+                if (rolando) {
+                    soltarTudo(ev);
+                    const cy = (p[0].y + p[9].y) / 2;
+                    if (scrollY !== null) {
+                        scrollAcc += (cy - scrollY) / tam;
+                        const passos = Math.trunc(scrollAcc / c.rolar_passo);
+                        if (passos) { ev.push({ tipo: 'rolar', passos }); scrollAcc -= passos * c.rolar_passo; }       // mão sobe -> passos negativos = roda para baixo (como arrastar o conteúdo)
+                    }
+                    scrollY = cy;
+                    return ev;
+                }
+                scrollY = null; scrollAcc = 0;
+                if (punho) { soltarTudo(ev); return ev; }
+
+                const [sx, sy] = mapa(px, py);
+                if (Math.abs(sx - ultX) > 0.002 || Math.abs(sy - ultY) > 0.002) { ev.push({ tipo: 'mover', x: sx, y: sy }); ultX = sx; ultY = sy; }
+                if (!pinca && rI < c.fecha) { pinca = true; fechouEm = t; }
+                else if (pinca && rI > c.abre) { pinca = false; if (baixo) { baixo = false; ev.push({ tipo: 'soltar' }); } }
+                if (pinca && !baixo && t - fechouEm >= c.baixar_ms) { baixo = true; ev.push({ tipo: 'baixar' }); }
+                if (!dirPress && rM < c.fecha && rI > 0.27 && t > dirAte) { dirPress = true; dirAte = t + c.dir_pausa_ms; ev.push({ tipo: 'clique_direito' }); }
+                else if (dirPress && rM > c.abre) dirPress = false;
+                return ev;
+            },
+        };
+    }
+
+    return { criarMouse, umEuro, filtrarPontos, LIM, dist, tamanhoMao, dedosEstendidos, centroPalma, criarMao, criarCabeca, medidasCabeca };
 });

@@ -142,6 +142,21 @@ def mover_mouse(x: int, y: int):
     user32.SetCursorPos(max(3, min(w - 1, int(x))), max(3, min(h - 1, int(y))))
 
 
+def mouse_botao(baixo: bool, botao: str = "esquerdo"):
+    """Aperta ou solta um botão do mouse (para ARRASTAR: aperta, move, solta)."""
+    descer, subir = {"esquerdo": (0x2, 0x4), "direito": (0x8, 0x10), "meio": (0x20, 0x40)}[botao]
+    user32.mouse_event(descer if baixo else subir, 0, 0, 0, 0)
+
+
+def zoom(passos: int):
+    """Ctrl + roda do mouse: zoom em navegadores, Office, mapas, visualizadores. Positivo = aproxima."""
+    user32.keybd_event(0x11, 0, 0, 0)
+    try:
+        user32.mouse_event(0x0800, 0, 0, ctypes.c_ulong(int(passos * 120) & 0xFFFFFFFF).value, 0)
+    finally:
+        user32.keybd_event(0x11, 0, KEYUP, 0)
+
+
 def rolar(passos: int):
     """Positivo = para cima, negativo = para baixo (1 passo ≈ 3 linhas)."""
     user32.mouse_event(0x0800, 0, 0, ctypes.c_ulong(int(passos * 120) & 0xFFFFFFFF).value, 0)

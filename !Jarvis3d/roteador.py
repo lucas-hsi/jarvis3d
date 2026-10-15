@@ -18,7 +18,7 @@ GRUPOS_ORDEM = ("nucleo", "arquivos", "pc", "navegador", "google", "camera", "in
 NUCLEO = {
     "pesquisar_web", "ler_pagina", "abrir_site", "ver_tela", "noticias", "abrir_programa", "consultar_cofre", "ler_nota",
     "controlar_volume", "controlar_midia", "lembrar", "buscar_memoria", "esquecer_memoria", "anotar_no_cofre",
-    "acrescentar_no_cofre", "trilha_sonora", "encerrar_conversa", "dormir", "habilitar_ferramentas", "briefing", "pensar_fundo", "modo_especialista", "pesquisa_profunda",
+    "acrescentar_no_cofre", "trilha_sonora", "encerrar_conversa", "dormir", "habilitar_ferramentas", "briefing", "pensar_fundo", "modo_especialista", "pesquisa_profunda", "lembrete_voz", "vigiar_cotacao", "rotina_salvar", "rotina_executar", "proativo_gerenciar",
 }
 ARQUIVOS = {"listar_pasta", "organizar_pasta", "mover_itens", "renomear_item", "criar_pasta", "mover_para_lixo",
             "desfazer_organizacao", "abrir_pasta", "ler_documento", "criar_documento", "buscar_documentos"}

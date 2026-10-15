@@ -81,7 +81,7 @@
 
   <div class="card larga">
     <h2>Gestos pela câmera (teste ao vivo)</h2>
-    <div class="linha"><button id="b-gestos">Ligar os gestos</button><span class="mini" id="g-info">Os pontos da mão e do rosto são achados por um modelo que roda neste computador; as regras dos gestos são do Jarvis. Nada é gravado nem enviado.</span></div>
+    <div class="linha"><button id="b-gestos">Ligar os gestos</button><label class="chk"><input type="checkbox" id="g-mouse"> simular mouse no ar (só mostra os eventos; NÃO mexe no seu ponteiro)</label><span class="mini" id="g-info">Os pontos da mão e do rosto são achados por um modelo que roda neste computador; as regras dos gestos são do Jarvis. Nada é gravado nem enviado.</span></div>
     <div style="display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start">
       <canvas id="g-tela" width="480" height="360" style="width:480px; max-width:100%; border-radius:10px; background:#000; border:1px solid var(--linha)"></canvas>
       <div style="flex:1; min-width:300px">
@@ -284,6 +284,8 @@ servidor();
       'cabeça        : ' + (md ? 'vista · inclinação ' + md.pitch.toFixed(3) + ' · giro ' + md.yaw.toFixed(3) : 'não vista');
   }
   Gestos.ao('gesto', registrar);
+  Gestos.ao('mouse', (ev) => { if (ev.tipo === 'mover') { window.__ult_mover = ev; return; } registrar({ tipo: 'mouse: ' + ev.tipo + (ev.passos ? ' ' + ev.passos : '') + (window.__ult_mover ? ' @(' + window.__ult_mover.x.toFixed(2) + ',' + window.__ult_mover.y.toFixed(2) + ')' : '') }); });
+  $('g-mouse').addEventListener('change', () => { Gestos.mouse($('g-mouse').checked); if ($('g-mouse').checked && !Gestos.estado().ligado) { $('g-mouse').checked = false; } });
   Gestos.ao('estado', (e) => { $('b-gestos').textContent = e.ligado ? 'Desligar os gestos' : e.carregando ? 'Carregando...' : 'Ligar os gestos'; $('b-gestos').disabled = !!e.carregando; });
   $('b-gestos').addEventListener('click', async () => {
     if (Gestos.estado().ligado) { Gestos.desligar(); cancelAnimationFrame(desenhando); desenhando = 0; return; }

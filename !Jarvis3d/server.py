@@ -16,6 +16,7 @@ import random
 import re
 import time
 import uuid
+import webbrowser
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -43,6 +44,7 @@ import documentos
 import especialistas
 import intencoes
 import pesquisa
+import proativo
 import interface
 import latencia
 import roteador
@@ -207,6 +209,140 @@ async def pensar_fundo(entrada: dict) -> str:
         except Exception as e:
             print(f"[jarvis] pensar_fundo falhou com {modelo}: {type(e).__name__}", flush=True)
     raise ValueError("Não consegui consultar o modelo maior agora.")
+
+
+def _quieto() -> bool:
+    ini, fim = CFG.get("proativo_silencio", ["22:00", "07:00"])
+    agora = datetime.now().strftime("%H:%M")
+    return (agora >= ini or agora < fim) if ini > fim else (ini <= agora < fim)
+
+
+async def anunciar_todos(texto: str, urgente: bool = False) -> bool:
+    """Fala um aviso em cada janela do Jarvis aberta e livre. False = ninguém pôde ouvir agora (tenta de novo no próximo ciclo)."""
+    if not urgente and _quieto():
+        return False
+    falou = False
+    for s in list(CLIENTES):
+        if (s.tarefa and not s.tarefa.done()) or s.confirmacoes or not s.janela:
+            continue
+        gid = "p" + uuid.uuid4().hex[:6]
+        await s.enviar({"tipo": "ferramenta", "id": gid, "rotulo": "ALERTA", "detalhe": texto[:70], "estado": "inicio"})
+        falante = Falante(s)
+        s.falante = falante
+        await falante.falar(texto, "serio" if urgente else "neutro")
+        await falante.terminar()
+        await s.enviar({"tipo": "ferramenta", "id": gid, "estado": "fim"})
+        s.historico += [{"role": "user", "content": "(aviso automático do Jarvis)"}, {"role": "assistant", "content": texto}]
+        s.historico = s.historico[-MAX_MENSAGENS_HISTORICO:]
+        falou = True
+    return falou
+
+
+async def executar_passos(sessao: "Sessao", passos: list) -> bool:
+    """Roda os passos de uma rotina (só ações já permitidas: abrir programa/site, volume, tema/layout, falar, esperar, briefing)."""
+    try:
+        for p in passos:
+            tipo, valor = p["tipo"], str(p.get("valor", ""))
+            if tipo == "abrir_programa":
+                achado = await asyncio.to_thread(_achar_programa, valor)
+                if achado:
+                    await asyncio.to_thread(ferramentas.abrir_programa_verificado, achado, CFG.get("programas", {}), 3.0)
+            elif tipo == "abrir_site" and valor.startswith(("http://", "https://")):
+                await asyncio.to_thread(webbrowser.open, valor)
+            elif tipo == "volume":
+                await asyncio.to_thread(windows_ctl.volume, "definir", max(0, min(100, int(float(valor)))))
+            elif tipo == "tema":
+                await interface.executar("ui_tema", {"tema": valor}, sessao)
+            elif tipo == "modo":
+                await interface.executar("ui_layout", {"acao": "preset", "nome": valor}, sessao)
+            elif tipo == "falar" and valor:
+                falante = Falante(sessao)
+                sessao.falante = falante
+                await falante.falar(valor, "neutro")
+                await falante.terminar()
+            elif tipo == "esperar":
+                await asyncio.sleep(max(0.0, min(30.0, float(valor or 1))))
+            elif tipo == "briefing":
+                await conversar(sessao, "Faça meu resumo do dia agora.", False)
+        return True
+    except Exception as e:
+        print(f"[jarvis] rotina falhou: {type(e).__name__}: {e}", flush=True)
+        return False
+
+
+async def laco_proativo():
+    """A cada 30 s: lembretes, rotinas com horário, alertas do Google; a cada 5 min também as cotações."""
+    await asyncio.sleep(20)
+    n = 0
+    while True:
+        try:
+            async def rotina(nome, passos):
+                alvo = next((s for s in CLIENTES if s.janela and not (s.tarefa and not s.tarefa.done())), None)
+                if alvo is None:
+                    return False
+                return await executar_passos(alvo, passos)
+            await proativo.verificar_uma_vez(anunciar_todos, rotina, google_auth.conectado, google_auth.api, checar_rede=(n % 10 == 0))
+        except Exception as e:
+            print(f"[jarvis] proativo: {type(e).__name__}", flush=True)
+        n += 1
+        await asyncio.sleep(30)
+
+
+async def ligar_mouse_no_ar(sessao: "Sessao", ativo: bool, motivo: str = ""):
+    """Liga/desliga o mouse no ar. Desligar SEMPRE solta o botão. Vigia: ESC (em qualquer janela), 10 min sem mão e queda da conexão desligam."""
+    if sessao.mouse_baixo:
+        windows_ctl.mouse_botao(False)
+        sessao.mouse_baixo = False
+    sessao.mouse_ativo = ativo
+    sessao.mouse_visto = time.monotonic()
+    await sessao.enviar({"tipo": "mouse_modo", "ativo": ativo, "motivo": motivo})
+    if ativo:
+        async def vigia():
+            while sessao.mouse_ativo:
+                await asyncio.sleep(0.25)
+                if windows_ctl.tecla_pressionada(0x1B):
+                    await ligar_mouse_no_ar(sessao, False, "esc")
+                    await sessao.enviar({"tipo": "aviso", "texto": "Mouse no ar desligado (ESC)."})
+                elif time.monotonic() - sessao.mouse_visto > 600:
+                    await ligar_mouse_no_ar(sessao, False, "tempo")
+                    await sessao.enviar({"tipo": "aviso", "texto": "Mouse no ar desligado (10 minutos sem mão)."})
+        asyncio.create_task(vigia())
+
+
+def tratar_mouse(sessao: "Sessao", msg: dict):
+    """Comandos do mouse no ar vindos da interface (coordenadas normalizadas 0..1). Ignora tudo se o modo não foi ligado pelo usuário."""
+    if not sessao.mouse_ativo:
+        return
+    acao = msg.get("acao")
+    agora = time.monotonic()
+    sessao.mouse_visto = agora
+    try:
+        if acao == "mover":
+            w, h = windows_ctl.tamanho_da_tela()
+            windows_ctl.mover_mouse(float(msg.get("x", 0)) * (w - 1), float(msg.get("y", 0)) * (h - 1))
+        elif acao in ("baixar", "clique_direito"):
+            sessao.mouse_cliques = [t for t in sessao.mouse_cliques if agora - t < 1.0]
+            if len(sessao.mouse_cliques) >= 8:                            # freio: no máximo 8 cliques por segundo
+                return
+            sessao.mouse_cliques.append(agora)
+            if ferramentas.pc.SENSIVEL_TITULO.search(windows_ctl.janela_em_foco()):
+                asyncio.get_running_loop().create_task(sessao.enviar({"tipo": "aviso", "texto": "Janela sensível em foco (banco, senha...): clique por gesto bloqueado."}))
+                return
+            if acao == "baixar":
+                windows_ctl.mouse_botao(True)
+                sessao.mouse_baixo = True
+            else:
+                windows_ctl.clicar(*windows_ctl.posicao_do_mouse(), botao="direito")
+        elif acao == "soltar":
+            if sessao.mouse_baixo:
+                windows_ctl.mouse_botao(False)
+                sessao.mouse_baixo = False
+        elif acao == "rolar":
+            windows_ctl.rolar(max(-5, min(5, int(msg.get("passos", 0)))))
+        elif acao == "zoom":
+            windows_ctl.zoom(max(-3, min(3, int(msg.get("passos", 0)))))
+    except (ValueError, TypeError, OSError):
+        return
 
 
 async def ligar_tela_ao_vivo(sessao: "Sessao", ativo: bool):
@@ -878,6 +1014,10 @@ class Sessao:
         self._vigia: asyncio.Task | None = None
         self.navegador_acoes = 0                    # limite de ações no navegador por pedido
         self.camera_ok = False                      # autorização da câmera vale só para esta sessão
+        self.mouse_ativo = False                    # modo "mouse no ar" (gestos movem o ponteiro): só o usuário liga, pelo botão ou pela voz
+        self.mouse_baixo = False
+        self.mouse_visto = 0.0
+        self.mouse_cliques: list = []
         self.modo = "geral"                         # modo especialista ligado (especialistas.py)
         self.tela_ativa = False                     # botão "tela ao vivo": resumo da tela a cada ~20 s enquanto ligado
         self.tela_resumo = ""
@@ -1156,6 +1296,19 @@ async def rodar_ferramenta(sessao: Sessao, bloco) -> dict:
                 lambda n, e, s: google_tools.executar(n, e, s, ao_mudar=google_mudou), agora_pt()), timeout=TEMPO_FERRAMENTA), False
         except asyncio.TimeoutError:
             conteudo, erro = "O briefing demorou demais e foi interrompido.", True
+    elif nome in proativo.NOMES:
+        try:
+            if nome == "rotina_executar":
+                alvo = str((entrada or {}).get("nome", "")).strip().lower()
+                passos = (proativo._ler()["rotinas"].get(alvo) or {}).get("passos")
+                if not passos:
+                    raise ValueError(f"Não achei a rotina '{alvo}'.")
+                asyncio.create_task(executar_passos(sessao, passos))
+                conteudo, erro = f"Rotina '{alvo}' em andamento ({len(passos)} passos).", False
+            else:
+                conteudo, erro = proativo.executar(nome, entrada if isinstance(entrada, dict) else {}), False
+        except (ValueError, TypeError) as e:
+            conteudo, erro = str(e), True
     elif nome == "modo_especialista":
         try:
             conteudo, erro = especialistas.aplicar(sessao, str((entrada or {}).get("modo", "geral"))), False
@@ -1290,6 +1443,10 @@ async def tentar_intencao(sessao: Sessao, texto: str) -> bool:
         return False
     it = await asyncio.to_thread(intencoes.interpretar, texto, _achar_programa)
     if not it:
+        rot = await asyncio.to_thread(proativo.achar_rotina, texto) if len(texto.split()) <= 6 else None
+        if rot:
+            it = {"acao": "rotina", "nome": rot, "fala": f"Rotina {rot}."}
+    if not it:
         return False
     return await executar_intencao(sessao, it, texto)
 
@@ -1297,7 +1454,7 @@ async def tentar_intencao(sessao: Sessao, texto: str) -> bool:
 async def executar_intencao(sessao: Sessao, it: dict, texto: str) -> bool:
     acao, fala = it["acao"], it.get("fala", "")
     gid = "i" + uuid.uuid4().hex[:6]
-    rotulo = {"abrir": "PROGRAMA", "midia": "MÍDIA", "volume": "MÍDIA", "ui": "INTERFACE", "hora": "HORA"}[acao]
+    rotulo = {"abrir": "PROGRAMA", "midia": "MÍDIA", "volume": "MÍDIA", "ui": "INTERFACE", "hora": "HORA", "mouse": "GESTO", "rotina": "ROTINA", "lembrete": "LEMBRETE"}[acao]
     detalhe = it.get("programa") or it.get("valor") or it.get("nome") or ""
     await sessao.enviar({"tipo": "ferramenta", "id": gid, "rotulo": rotulo, "detalhe": str(detalhe)[:60], "estado": "inicio"})
     try:
@@ -1311,6 +1468,13 @@ async def executar_intencao(sessao: Sessao, it: dict, texto: str) -> bool:
             await asyncio.to_thread(windows_ctl.volume, it["valor"], it.get("n", 10))
         elif acao == "ui":
             await interface.executar(it["nome"], it["entrada"], sessao)
+        elif acao == "rotina":
+            passos = (proativo._ler()["rotinas"].get(it["nome"]) or {}).get("passos") or []
+            asyncio.create_task(executar_passos(sessao, passos))
+        elif acao == "lembrete":
+            proativo.lembrete_add(it["texto"], it["minutos"])
+        elif acao == "mouse":
+            await sessao.enviar({"tipo": "mouse_pedido", "ativo": bool(it["valor"])})           # a interface liga/desliga (ela é quem tem a câmera)
         elif acao == "hora":
             n = datetime.now()
             fala = f"São {n.hour} horas." if n.minute == 0 else f"São {n.hour} e {n.minute:02d}."
@@ -1341,7 +1505,7 @@ async def conversar(sessao: Sessao, texto_usuario: str, ativacao: bool):
     todas = (ferramentas.definicoes(CFG.get("programas", {}), TEM_COFRE) + cerebro.definicoes(TEM_COFRE)
              + ([camera.definicao(), direcao.definicao()] if CAMERA_LIGADA else []) + navegador.definicoes() + interface.definicoes()
              + google_tools.definicoes(google_auth.conectado()) + ([FERRAMENTA_TRILHA] if achar_musica() else [])
-             + [FERRAMENTA_ENCERRAR, FERRAMENTA_DORMIR, FERRAMENTA_PENSAR, especialistas.FERRAMENTA, pesquisa.DEFINICAO, briefing.DEFINICAO] + documentos.DEFINICOES)
+             + [FERRAMENTA_ENCERRAR, FERRAMENTA_DORMIR, FERRAMENTA_PENSAR, especialistas.FERRAMENTA, pesquisa.DEFINICAO, briefing.DEFINICAO] + documentos.DEFINICOES + proativo.DEFINICOES)
     if ROTEAR_FERRAMENTAS:
         todas.append(roteador.FERRAMENTA_HABILITAR)
     sessao.todas_ferr = todas
@@ -1584,6 +1748,8 @@ async def vida(app: FastAPI):
             except Exception as e:
                 print(f"[jarvis] índice de documentos falhou: {type(e).__name__}", flush=True)
         asyncio.get_running_loop().create_task(_indexar_docs())
+    if CFG.get("proativo", True):
+        asyncio.get_running_loop().create_task(laco_proativo())
     asyncio.get_running_loop().create_task(preparar_fillers())      # em segundo plano; só gasta voz na 1ª vez (ou se trocar de voz)
     await atualizar_clima()
     await atualizar_manchetes()
@@ -1711,6 +1877,10 @@ async def ws_endpoint(ws: WebSocket):
                 achado = await asyncio.to_thread(_achar_programa, nome_prog)       # só programas conhecidos; o botão do painel não passa pelo filtro de frases
                 if not achado or not await executar_intencao(sessao, {"acao": "abrir", "programa": achado, "fala": f"Abrindo {achado}."}, "abre " + achado):
                     await sessao.enviar({"tipo": "aviso", "texto": f"Não achei '{nome_prog}' entre os programas instalados."})
+            elif tipo == "mouse_modo":
+                await ligar_mouse_no_ar(sessao, bool(msg.get("ativo")))
+            elif tipo == "mouse":
+                tratar_mouse(sessao, msg)
             elif tipo == "tela_ao_vivo":
                 await ligar_tela_ao_vivo(sessao, bool(msg.get("ativo")))
             elif tipo == "gesto":
@@ -1726,6 +1896,10 @@ async def ws_endpoint(ws: WebSocket):
     finally:
         sessao.cancelar()
         sessao.direcao.parar()
+        if sessao.mouse_baixo:                       # conexão caiu com o botão apertado: solta
+            windows_ctl.mouse_botao(False)
+            sessao.mouse_baixo = False
+        sessao.mouse_ativo = False
         CLIENTES.discard(sessao)
 
 

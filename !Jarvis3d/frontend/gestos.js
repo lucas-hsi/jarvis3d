@@ -5,9 +5,9 @@
     const BASE = '/static/vendor/mediapipe';
     const R = window.GestosRegras;
     const estado = { ligado: false, carregando: false, erro: '', fps: 0, mao: false, rosto: false, delegate: '' };
-    const ouvintes = { gesto: [], estado: [] };
+    const ouvintes = { gesto: [], estado: [], mouse: [] };
     let video = null, fluxo = null, maoDet = null, rostoDet = null, laco = 0, mod = null;
-    let regrasMao = null, regrasCabeca = null, suavizaMao = null;
+    let regrasMao = null, regrasCabeca = null, suavizaMao = null, regrasMouse = null, suavizaMaos = [], modoMouse = false;
     let ultimo = { mao: null, rosto: null, medidas: null, mao_estado: null };
     let semMaoDesde = 0, contaQuadros = 0, t0Fps = performance.now(), ultimoRosto = 0;
 
@@ -44,7 +44,13 @@
                 const i0 = performance.now();
                 const rm = maoDet.detectForVideo(video, agora);
                 estado.ms_mao = Math.round(performance.now() - i0);
-                const pm = suavizaMao(rm && rm.landmarks && rm.landmarks[0] ? espelha(rm.landmarks[0]) : null, agora);      // One Euro: tira o tremor
+                const lista = rm && rm.landmarks ? rm.landmarks : [];
+                const pm = suavizaMao(lista[0] ? espelha(lista[0]) : null, agora);      // One Euro: tira o tremor
+                if (modoMouse) {                                                       // mouse no ar: até duas mãos (a segunda serve ao zoom)
+                    const maos = lista.slice(0, 2).map((l, i) => suavizaMaos[i](espelha(l), agora));
+                    if (!maos.length) { suavizaMaos[0](null, agora); suavizaMaos[1](null, agora); }
+                    for (const ev of regrasMouse.atualizar(maos, agora, asp)) emitir('mouse', ev);
+                }
                 estado.mao = !!pm; ultimo.mao = pm;
                 for (const ev of regrasMao.atualizar(pm, agora, asp)) emitir('gesto', ev);
                 ultimo.mao_estado = pm ? regrasMao.estado(pm, asp) : null;
@@ -76,6 +82,7 @@
             video.playsInline = true; video.muted = true; video.srcObject = fluxo;
             await video.play();
             regrasMao = R.criarMao(); regrasCabeca = R.criarCabeca(); suavizaMao = R.filtrarPontos(1.2, 8);
+            regrasMouse = R.criarMouse(); suavizaMaos = [R.filtrarPontos(1.2, 8), R.filtrarPontos(1.2, 8)];
             estado.ligado = true;
             laco = setTimeout(quadro, 33);
         } catch (e) {
@@ -87,7 +94,7 @@
     }
 
     function desligar() {
-        estado.ligado = false; estado.mao = estado.rosto = false;
+        estado.ligado = false; estado.mao = estado.rosto = false; modoMouse = false;
         if (laco) clearTimeout(laco); laco = 0;
         if (fluxo) fluxo.getTracks().forEach((t) => t.stop());
         fluxo = null; if (video) { video.srcObject = null; video = null; }
@@ -95,7 +102,15 @@
         mudou();
     }
 
+    function mouse(ligar) {                                    // liga/desliga o MOUSE NO AR (precisa dos gestos ligados)
+        modoMouse = !!ligar && estado.ligado;
+        if (regrasMouse) regrasMouse.reiniciar();
+        try { if (maoDet) maoDet.setOptions({ numHands: modoMouse ? 2 : 1 }); } catch (_) { /* segue com o que tem */ }
+        return modoMouse;
+    }
+
     window.Gestos = {
+        mouse, modoMouse: () => modoMouse,
         ligar, desligar, estado: () => ({ ...estado }), ultimo: () => ultimo, video: () => video,
         ao(tipo, f) { ouvintes[tipo].push(f); },
         disponivel: () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && R),
