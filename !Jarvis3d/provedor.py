@@ -6,5 +6,13 @@ def deepseek(cliente) -> bool:
     return "deepseek" in str(getattr(cliente, "base_url", "")).lower()
 
 
+def gemini(cliente) -> bool:
+    return "generativelanguage.googleapis.com" in str(getattr(cliente, "base_url", "")).lower()
+
+
 def extras(cliente, esforco: str = "low") -> dict:
-    return {"thinking": {"type": "disabled"}} if deepseek(cliente) else {"output_config": {"effort": esforco}}
+    if deepseek(cliente):
+        return {"thinking": {"type": "disabled"}}
+    if gemini(cliente):
+        return {}
+    return {"output_config": {"effort": esforco}}

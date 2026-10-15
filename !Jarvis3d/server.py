@@ -117,15 +117,30 @@ except Exception as e:  # sem credencial nenhuma: o painel avisa em vez de cair
     ai = None
     print(f"[jarvis] Sem acesso à Anthropic: {e}", flush=True)
 
+GEMINI_KEY = CFG.get("gemini_api_key") or os.environ.get("GEMINI_API_KEY", "")
 DEEPSEEK_KEY = CFG.get("deepseek_api_key") or os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE = CFG.get("deepseek_base_url", "https://api.deepseek.com/anthropic")
-PROVEDOR = os.environ.get("JARVIS_PROVEDOR") or CFG.get("provedor") or ("deepseek" if len(DEEPSEEK_KEY) > 20 else "anthropic")
+PROVEDOR = os.environ.get("JARVIS_PROVEDOR") or CFG.get("provedor") or (
+    "gemini" if len(GEMINI_KEY) > 20 else ("deepseek" if len(DEEPSEEK_KEY) > 20 else "anthropic")
+)
 if os.environ.get("ANTHROPIC_BASE_URL", "").startswith(("http://127.0.0.1", "http://localhost")):                       # testes com a Anthropic falsa: nunca vão para o DeepSeek de verdade
     PROVEDOR = "anthropic"
 ai_reserva, MODELO_RESERVA = None, MODELO
-DEEPSEEK_SUSPENSO = {"ate": 0.0}                                   # disjuntor: o DeepSeek caiu/travou, usa a reserva por 5 min sem nem tentar
-MODELO_PROFUNDO = CFG.get("modelo_profundo", "deepseek-v4-pro" if PROVEDOR == "deepseek" else "claude-sonnet-5-5")
-if PROVEDOR == "deepseek" and len(DEEPSEEK_KEY) > 20:
+DEEPSEEK_SUSPENSO = {"ate": 0.0}                                   # disjuntor: o principal caiu/travou, usa a reserva por 5 min sem nem tentar
+MODELO_PROFUNDO = CFG.get("modelo_profundo", "gemini-3.5-flash-lite" if PROVEDOR == "gemini" else ("deepseek-v4-pro" if PROVEDOR == "deepseek" else "claude-sonnet-5-5"))
+
+if PROVEDOR == "gemini" and len(GEMINI_KEY) > 20:
+    import gemini_adaptador
+    if len(DEEPSEEK_KEY) > 20:
+        ai_reserva = anthropic.AsyncAnthropic(api_key=DEEPSEEK_KEY, base_url=DEEPSEEK_BASE, max_retries=1, timeout=10.0,
+                                              http_client=anthropic.DefaultAsyncHttpxClient(limits=httpx.Limits(max_connections=50, max_keepalive_connections=10)))
+        MODELO_RESERVA = CFG.get("modelo_deepseek", "deepseek-flash")
+    elif ai is not None and len(str(CFG.get("anthropic_api_key") or "")) > 20 and not str(CFG.get("anthropic_api_key")).upper().startswith("COLE_AQUI"):
+        ai_reserva = ai
+        MODELO_RESERVA = MODELO
+    ai = gemini_adaptador.AsyncGeminiClient(api_key=GEMINI_KEY, model=CFG.get("modelo_gemini", "gemini-3.5-flash-lite"))
+    MODELO = CFG.get("modelo_gemini", "gemini-3.5-flash-lite")
+elif PROVEDOR == "deepseek" and len(DEEPSEEK_KEY) > 20:
     ai_reserva = ai if (ai is not None and len(str(CFG.get("anthropic_api_key") or "")) > 20 and not str(CFG.get("anthropic_api_key")).upper().startswith("COLE_AQUI")) else None       # se o DeepSeek cair, a Anthropic assume o turno
     ai = anthropic.AsyncAnthropic(api_key=DEEPSEEK_KEY, base_url=DEEPSEEK_BASE, max_retries=0 if ai_reserva is not None else 2, timeout=8.0 if ai_reserva is not None else 30.0,      # travou? cai logo para a reserva
                                   http_client=anthropic.DefaultAsyncHttpxClient(limits=httpx.Limits(max_connections=100, max_keepalive_connections=20, keepalive_expiry=300)))
@@ -145,7 +160,7 @@ async def aquecer_conexoes():
     _AQUECIDO[0] = time.monotonic()
 
     async def a():
-        if ai:
+        if ai and hasattr(ai, "models"):
             await ai.models.list(limit=1)
 
     async def e():
@@ -1603,7 +1618,7 @@ async def conversar(sessao: Sessao, texto_usuario: str, ativacao: bool):
                 try:
                     cliente, modelo_da_vez = (ai_reserva, MODELO_RESERVA) if usando_reserva else (ai, modelo_turno)
                     extras = {"output_config": {"effort": ESFORCO}} if (PROVEDOR == "anthropic" or usando_reserva) else (
-                        {} if modelo_turno != MODELO else {"thinking": {"type": "disabled"}})      # DeepSeek rápido: sem raciocínio (mais veloz e aceita ferramentas); o modelo maior raciocina
+                        {} if (PROVEDOR == "gemini" or modelo_turno != MODELO) else {"thinking": {"type": "disabled"}})      # DeepSeek rápido: sem raciocínio (mais veloz e aceita ferramentas); o modelo maior raciocina
                     async with cliente.messages.stream(
                         model=modelo_da_vez, max_tokens=2000, system=sistema_da_rodada(), tools=ferr_rodada, messages=mensagens, **extras,
                     ) as stream:
@@ -1615,11 +1630,12 @@ async def conversar(sessao: Sessao, texto_usuario: str, ativacao: bool):
                         resposta = await stream.get_final_message()
                     custos.registrar(modelo_da_vez, resposta.usage)
                     break
-                except (anthropic.APIConnectionError, anthropic.InternalServerError, anthropic.RateLimitError, anthropic.APITimeoutError) as e:
+                except (anthropic.APIConnectionError, anthropic.InternalServerError, anthropic.RateLimitError, anthropic.APITimeoutError, RuntimeError) as e:
                     if tentativa == 0 and ai_reserva is not None and not usando_reserva and not buffer:       # o principal caiu antes de falar: reserva neste pedido
                         usando_reserva = True
                         DEEPSEEK_SUSPENSO["ate"] = time.monotonic() + 300
-                        print(f"[jarvis] {PROVEDOR} indisponível ({type(e).__name__}); usando a Anthropic neste pedido", flush=True)
+                        nome_reserva = "DeepSeek" if PROVEDOR == "gemini" and len(DEEPSEEK_KEY) > 20 else "Anthropic"
+                        print(f"[jarvis] {PROVEDOR} indisponível ({type(e).__name__}); usando a reserva ({nome_reserva}) neste pedido", flush=True)
                         latencia.evento("reserva:" + type(e).__name__)
                         continue
                     raise
