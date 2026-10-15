@@ -13,6 +13,7 @@ import httpx
 from lxml import html as lhtml
 
 import caminhos
+import provedor
 
 PERFIS = {"rapida": (2, 4), "normal": (3, 7), "profunda": (5, 11)}          # (subperguntas, páginas lidas)
 CAB = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36", "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.6"}
@@ -80,7 +81,7 @@ async def pesquisar(cliente, modelo_rapido: str, modelo_forte: str, tema: str, p
     texto = lambda r: "".join(b.text for b in r.content if getattr(b, "type", "") == "text")           # noqa: E731
     hoje = time.strftime("%d/%m/%Y")
     # 1) subperguntas
-    r = await cliente.messages.create(model=modelo_rapido, max_tokens=300, messages=[{"role": "user", "content":
+    r = await cliente.messages.create(model=modelo_rapido, max_tokens=300, **provedor.extras(cliente), messages=[{"role": "user", "content":
         f"Hoje é {hoje}. Para pesquisar na web o tema abaixo, escreva {n_q} consultas de busca curtas e DIFERENTES (ângulos distintos; inclua o ano quando o dado for atual). "
         f"Responda só um array JSON de strings.\n\nTema: {tema}"}])
     registrar(modelo_rapido, r.usage)

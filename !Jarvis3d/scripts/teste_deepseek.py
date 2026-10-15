@@ -18,6 +18,7 @@ os.environ["JARVIS_MEMORIA_DIR"] = tempfile.mkdtemp(prefix="jarvis_ds_")
 os.environ["JARVIS_SEM_VOZ"] = "1"
 sys.path.insert(0, str(BASE))
 sys.stdout.reconfigure(encoding="utf-8")
+import provedor  # noqa: E402
 import server  # noqa: E402
 
 ok = True
@@ -58,12 +59,12 @@ async def principal():
     checar("paris" in texto.lower(), f"respondeu '{texto.strip()[:60]}' (1º texto {primeiro:.0f} ms)")
 
     print("2) ferramenta (tool_use)")
-    r = await ai.messages.create(model=M, max_tokens=300, tools=FERR, messages=[{"role": "user", "content": "Abre a calculadora"}])
+    r = await ai.messages.create(model=M, max_tokens=300, tools=FERR, messages=[{"role": "user", "content": "Abre a calculadora"}], **provedor.extras(ai))
     usos = [b for b in r.content if b.type == "tool_use"]
     checar(usos and usos[0].name == "abrir_programa" and "calc" in str(usos[0].input).lower(), f"chamou {usos[0].name if usos else None} {usos[0].input if usos else ''}")
     msgs = [{"role": "user", "content": "Abre a calculadora"}, {"role": "assistant", "content": r.content},
             {"role": "user", "content": [{"type": "tool_result", "tool_use_id": usos[0].id, "content": "calculadora aberto (janela 'Calculadora')."}]}]
-    r2 = await ai.messages.create(model=M, max_tokens=200, tools=FERR, messages=msgs)
+    r2 = await ai.messages.create(model=M, max_tokens=200, tools=FERR, messages=msgs, **provedor.extras(ai))
     checar(any(b.type == "text" and b.text.strip() for b in r2.content), f"depois do resultado fala: '{''.join(b.text for b in r2.content if b.type == 'text')[:70]}'")
 
     print("3) imagem")
@@ -75,7 +76,7 @@ async def principal():
     msgs = [{"role": "user", "content": "Olha a tela e me diz o total."}, {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_1", "name": "ver_tela", "input": {}}]},
             {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "toolu_1", "content": [imagem_teste(), {"type": "text", "text": "Print da tela."}]}]}]
     try:
-        r = await ai.messages.create(model=M, max_tokens=200, tools=[{"name": "ver_tela", "description": "print da tela", "input_schema": {"type": "object", "properties": {}}}], messages=msgs)
+        r = await ai.messages.create(model=M, max_tokens=200, tools=[{"name": "ver_tela", "description": "print da tela", "input_schema": {"type": "object", "properties": {}}}], messages=msgs, **provedor.extras(ai))
         t = "".join(b.text for b in r.content if b.type == "text")
         checar("350" in t, f"leu a imagem no tool_result: '{t.strip()[:60]}'")
     except Exception as e:
@@ -93,7 +94,7 @@ async def principal():
     ms = []
     for _ in range(5):
         t0 = time.perf_counter()
-        async with ai.messages.stream(model=M, max_tokens=60, system=server.REGRAS[:6000], tools=FERR, messages=[{"role": "user", "content": "Que horas são?"}]) as s:
+        async with ai.messages.stream(model=M, max_tokens=60, system=server.REGRAS[:6000], messages=[{"role": "user", "content": "Qual a capital da Itália?"}], **provedor.extras(ai)) as s:
             async for p in s.text_stream:
                 ms.append((time.perf_counter() - t0) * 1000); break
             await s.get_final_message()

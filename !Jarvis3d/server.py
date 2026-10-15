@@ -44,6 +44,7 @@ import documentos
 import especialistas
 import intencoes
 import pesquisa
+import provedor
 import proativo
 import interface
 import latencia
@@ -124,7 +125,7 @@ DEEPSEEK_SUSPENSO = {"ate": 0.0}                                   # disjuntor: 
 MODELO_PROFUNDO = CFG.get("modelo_profundo", "deepseek-v4-pro" if PROVEDOR == "deepseek" else "claude-sonnet-5-5")
 if PROVEDOR == "deepseek" and len(DEEPSEEK_KEY) > 20:
     ai_reserva = ai if (ai is not None and len(str(CFG.get("anthropic_api_key") or "")) > 20 and not str(CFG.get("anthropic_api_key")).upper().startswith("COLE_AQUI")) else None       # se o DeepSeek cair, a Anthropic assume o turno
-    ai = anthropic.AsyncAnthropic(api_key=DEEPSEEK_KEY, base_url=DEEPSEEK_BASE, max_retries=0 if ai_reserva is not None else 2, timeout=10.0 if ai_reserva is not None else 30.0,      # travou? cai logo para a reserva
+    ai = anthropic.AsyncAnthropic(api_key=DEEPSEEK_KEY, base_url=DEEPSEEK_BASE, max_retries=0 if ai_reserva is not None else 2, timeout=8.0 if ai_reserva is not None else 30.0,      # travou? cai logo para a reserva
                                   http_client=anthropic.DefaultAsyncHttpxClient(limits=httpx.Limits(max_connections=100, max_keepalive_connections=20, keepalive_expiry=300)))
     MODELO = CFG.get("modelo_deepseek", "deepseek-flash")
 else:
@@ -368,7 +369,7 @@ async def _laco_tela(sessao: "Sessao"):
                 else:
                     img = (await asyncio.to_thread(ferramentas.ver_tela))[0]
                     r = await ai.messages.create(
-                        model=MODELO, max_tokens=220,
+                        model=MODELO, max_tokens=220, **provedor.extras(ai),
                         system="Descreva em até 60 palavras, em português, o que está na tela: programa em uso, o que o usuário parece fazer e textos importantes. Nunca transcreva senhas, cartões ou códigos.",
                         messages=[{"role": "user", "content": [img, {"type": "text", "text": "Resumo da tela:"}]}])
                     custos.registrar(MODELO, r.usage)
@@ -1567,7 +1568,8 @@ async def conversar(sessao: Sessao, texto_usuario: str, ativacao: bool):
                 ferr_rodada = ferramentas_da_rodada()
                 try:
                     cliente, modelo_da_vez = (ai_reserva, MODELO_RESERVA) if usando_reserva else (ai, modelo_turno)
-                    extras = {"output_config": {"effort": ESFORCO}} if (PROVEDOR == "anthropic" or usando_reserva) else {}
+                    extras = {"output_config": {"effort": ESFORCO}} if (PROVEDOR == "anthropic" or usando_reserva) else (
+                        {} if modelo_turno != MODELO else {"thinking": {"type": "disabled"}})      # DeepSeek rápido: sem raciocínio (mais veloz e aceita ferramentas); o modelo maior raciocina
                     async with cliente.messages.stream(
                         model=modelo_da_vez, max_tokens=2000, system=sistema_da_rodada(), tools=ferr_rodada, messages=mensagens, **extras,
                     ) as stream:

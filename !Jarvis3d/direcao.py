@@ -17,6 +17,8 @@ Privacidade e custo (impostos aqui, não pelo modelo):
 
 import time
 
+import provedor
+
 NOME = "modo_gravacao"
 ROTULO = "DIREÇÃO"
 INTERVALO_MIN, INTERVALO_PADRAO, INTERVALO_MAX = 10, 25, 120
@@ -146,7 +148,7 @@ async def analisar(ai, modelo: str, nome: str, jpeg: bytes, metricas: dict, obje
             messages=[{"role": "user", "content": [
                 {"type": "text", "text": texto},
                 {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": base64.standard_b64encode(jpeg).decode()}}]}],
-            tools=[FERRAMENTA_DICA], tool_choice={"type": "tool", "name": "dica_de_direcao"}, output_config={"effort": "low"})
+            tools=[FERRAMENTA_DICA], tool_choice={"type": "tool", "name": "dica_de_direcao"}, **provedor.extras(ai))
     except Exception as e:
         print(f"[jarvis] direção: {type(e).__name__}: {e}", flush=True)
         return {"nota": "", "gravidade": 0, "categoria": "geral", "erro": type(e).__name__}

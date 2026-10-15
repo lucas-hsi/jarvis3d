@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 
 import memoria
+import provedor
 
 ESPELHO = "Memórias do Jarvis.md"
 INTOCAVEIS = {"Templates", "Ferramentas", ".obsidian", ".trash", ".git"}
@@ -495,7 +496,7 @@ async def aprender(ai, modelo: str, mem, nome: str, fala_usuario: str, resposta:
             model=modelo, max_tokens=900, system=PROMPT_APRENDIZ.replace("{nome}", nome),
             messages=[{"role": "user", "content": conteudo}],
             tools=[FERRAMENTA_REGISTRO], tool_choice={"type": "tool", "name": "registrar_memorias"},
-            output_config={"effort": "low"})
+            **provedor.extras(ai))
     except Exception as e:
         print(f"[jarvis] aprendizado falhou: {type(e).__name__}: {e}", flush=True)
         return []
