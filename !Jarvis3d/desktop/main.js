@@ -579,7 +579,7 @@ async function rodarTesteCliques() {
         await new Promise((res) => (janela.webContents.isLoading() ? janela.webContents.once('did-finish-load', res) : res()));
         const js = (c) => janela.webContents.executeJavaScript(c);
         const dorme = (ms) => new Promise((x) => setTimeout(x, ms));
-        janela.setSize(1440, 860);
+        janela.setSize(1280, 640);
         for (let i = 0; i < 80; i++) { if (await js(`document.body.classList.contains('ui3d-ok')`)) break; await dorme(250); }
         await dorme(4500);                                              // termina a entrada dos painéis
         await js(`document.getElementById('inicio').classList.add('oculto')`);
@@ -612,6 +612,10 @@ async function rodarTesteCliques() {
             }
             r.variantes[nome] = res;
         }
+        await js(`UI.comando({ comando: 'ui_layout', acao: 'preset', nome: 'completo' })`); await dorme(1200);
+        r.colunas = await js(`[...document.querySelectorAll('.coluna')].map((c) => ({ lado: c.className, rolagem: c.scrollHeight, visivel: c.clientHeight, overflowY: getComputedStyle(c).overflowY, paineis: c.querySelectorAll(':scope > .painel').length }))`);
+        await js(`(() => { const c = document.querySelector('.coluna.dir'); c.scrollTop = c.scrollHeight; })()`); await dorme(300);
+        r.rolou = await js(`document.querySelector('.coluna.dir').scrollTop`);
         wc.debugger.detach();
     } catch (e) { r.erro = String(e); }
     process.stdout.write('RESULTADO_CLIQUES ' + JSON.stringify(r) + '\n');

@@ -7,7 +7,7 @@ body.moderno .vinheta { background: radial-gradient(ellipse at center, transpare
 
 /* sem inclinação 3D nas laterais: a perspectiva atrapalhava o clique e dava cara de "tela de hacker" */
 body.moderno #hud, body.ui3d.moderno #hud { perspective: none; transform-style: flat; }
-body.ui3d.moderno .coluna, body.ui3d.moderno .coluna.esq, body.ui3d.moderno .coluna.dir { transform: none; transform-style: flat; overflow: visible; gap: 14px; }
+body.ui3d.moderno .coluna, body.ui3d.moderno .coluna.esq, body.ui3d.moderno .coluna.dir { transform: none; transform-style: flat; gap: 14px; }
 body.ui3d.moderno .topo, body.ui3d.moderno .rodape { transform: none; }
 body.moderno .coluna { padding-top: 4px; }
 
@@ -136,3 +136,11 @@ body.moderno .ac-cartao, body.moderno .ac-barra span, body.moderno .ac-corpo { f
 #btn-restaurar { position: fixed; top: 16px; right: 16px; z-index: 40; display: none; opacity: .55; }
 body.laterais-off #btn-restaurar { display: inline-flex; }
 #btn-restaurar:hover { opacity: 1; }
+
+/* colunas ROLAM quando os painéis não cabem (nada fica cortado); arrastar um painel pelo título REORDENA (a coluna libera a borda enquanto se arrasta) */
+body.moderno .coluna, body.ui3d.moderno .coluna { overflow-y: auto; overflow-x: hidden; min-height: 0; padding: 4px 6px 12px 2px; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .22) transparent; }
+body.moderno .coluna::-webkit-scrollbar { width: 6px; }
+body.moderno .coluna::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .2); border-radius: 6px; }
+body.moderno .coluna::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, .35); }
+body.moderno .coluna.arrastando-fora, body.ui3d.moderno .coluna.arrastando-fora { overflow: visible; }
+body.moderno .painel.arrastando { cursor: grabbing; z-index: 30; }

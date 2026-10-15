@@ -148,6 +148,7 @@
         for (const id of ids) document.querySelectorAll(`.painel[data-painel="${id}"]`).forEach((p) => alvos.push(p));
         if (!alvos.length) return;
         col.forEach((c) => c.classList.add('tem-foco'));
+        try { alvos[0].scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) {}      // o painel da ação aparece mesmo se estava fora da área visível
         alvos.forEach((p) => { p.classList.add('em-foco'); clearTimeout(p._focoT); p._focoT = setTimeout(() => {
             p.classList.remove('em-foco');
             if (!document.querySelector('.painel.em-foco')) col.forEach((c) => c.classList.remove('tem-foco'));
@@ -163,7 +164,7 @@
 
     function registrar(el) {
         const id = el.id || el.dataset.painel;
-        const p = painel.get(el) || { el, id, px: 0, py: 0, dx: (POS[id] || [0, 0])[0], dy: (POS[id] || [0, 0])[1], vx: 0, vy: 0, arrasta: false,
+        const p = painel.get(el) || { el, id, px: 0, py: 0, dx: 0, dy: 0, vx: 0, vy: 0, arrasta: false,
             massa: 0.7 + (parseFloat(getComputedStyle(el).getPropertyValue('--i')) || 0) * 0.12 };
         painel.set(el, p);
         return p;
@@ -212,6 +213,8 @@
     function painelDoCabecalho(x, y) {
         for (const p of painel.values()) {
             if (!p.topo || !p.el.isConnected) continue;
+            const col = p.el.parentElement.getBoundingClientRect();
+            if (y < col.top || y > col.bottom || x < col.left - 4 || x > col.right + 4) continue;       // painel rolado para fora da coluna não responde
             const r = p.topo.getBoundingClientRect();
             if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return p;
         }
@@ -219,7 +222,9 @@
     }
 
     function voltarAoLugar(p) {
-        p.dx = p.dy = p.vx = p.vy = 0; delete POS[p.id]; salvar();
+        p.dx = p.dy = p.vx = p.vy = 0;
+        if (ORDEM_PADRAO) aplicarOrdem(ORDEM_PADRAO);
+        try { localStorage.removeItem('jarvis_ordem'); } catch (_) {}
         p.el.classList.add('voltando'); setTimeout(() => p.el.classList.remove('voltando'), 600); acordar();
     }
 
@@ -230,6 +235,7 @@
         e.preventDefault();
         p.arrasta = true; p.vx = p.vy = 0;
         p.el.classList.add('arrastando');
+        document.querySelectorAll('.coluna').forEach((c) => c.classList.add('arrastando-fora'));      // enquanto arrasta, a coluna deixa o painel passar para a outra
         let ux = e.clientX, uy = e.clientY, t = performance.now();
         const mover = (ev) => {
             const agora = performance.now(), dt = Math.max(8, agora - t);
@@ -238,17 +244,40 @@
             ux = ev.clientX; uy = ev.clientY; t = agora;
             acordar();
         };
-        const soltar = () => {
+        const soltar = (ev) => {
             removeEventListener('pointermove', mover); removeEventListener('pointerup', soltar); removeEventListener('pointercancel', soltar);
             p.arrasta = false; p.el.classList.remove('arrastando');
-            if (performance.now() - t > 90) { p.vx = p.vy = 0; }       // parou antes de soltar: sem arremesso
-            limitar(p); POS[p.id] = [Math.round(p.dx), Math.round(p.dy)]; salvar(); acordar();
+            document.querySelectorAll('.coluna').forEach((c) => c.classList.remove('arrastando-fora'));
+            reordenar(p, ev && ev.clientX !== undefined ? ev.clientX : ux, ev && ev.clientY !== undefined ? ev.clientY : uy);
+            p.vx = p.vy = 0; p.dx = p.dy = 0;
+            p.el.classList.add('voltando'); setTimeout(() => p.el.classList.remove('voltando'), 450);
+            acordar();
         };
         addEventListener('pointermove', mover); addEventListener('pointerup', soltar); addEventListener('pointercancel', soltar);
     }, true);
     addEventListener('dblclick', (e) => { const p = painelDoCabecalho(e.clientX, e.clientY); if (p) voltarAoLugar(p); }, true);
 
+    // ---- ordem dos painéis: solta onde quiser (outra posição ou a outra coluna); fica guardada; duplo clique no título devolve o layout padrão
+    const colunas = () => ({ esq: document.querySelector('.coluna.esq'), dir: document.querySelector('.coluna.dir') });
+    const ordemAtual = () => { const c = colunas(); return { esq: [...c.esq.querySelectorAll(':scope > .painel')].map((x) => x.id), dir: [...c.dir.querySelectorAll(':scope > .painel')].map((x) => x.id) }; };
+    let ORDEM_PADRAO = null;
+    function aplicarOrdem(o) {
+        const c = colunas();
+        for (const lado of ['esq', 'dir']) for (const id of (o[lado] || [])) { const el = document.getElementById(id); if (el) c[lado].appendChild(el); }
+    }
+    function reordenar(p, x, y) {
+        const c = colunas();
+        const alvoCol = (x < innerWidth / 2) ? c.esq : c.dir;
+        const irmaos = [...alvoCol.querySelectorAll(':scope > .painel')].filter((el) => el !== p.el && el.offsetParent !== null);
+        const depois = irmaos.find((el) => { const r = el.getBoundingClientRect(); return y < r.top + r.height / 2; });
+        if (depois) alvoCol.insertBefore(p.el, depois); else alvoCol.appendChild(p.el);
+        try { localStorage.setItem('jarvis_ordem', JSON.stringify(ordemAtual())); } catch (_) {}
+        p.el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
     function iniciarPaineis() {
+        ORDEM_PADRAO = ordemAtual();
+        try { const o = JSON.parse(localStorage.getItem('jarvis_ordem') || 'null'); if (o) aplicarOrdem(o); localStorage.removeItem('jarvis_painel_pos'); } catch (_) { /* usa o padrão */ }
         document.querySelectorAll('.painel').forEach((el) => {
             registrar(el); arrastavel(el);
             el.addEventListener('animationend', (e) => { if (e.target === el) el.classList.add('entrou'); });      // terminou a entrada: libera opacidade/filtro para o foco
