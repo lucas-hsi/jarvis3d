@@ -422,6 +422,7 @@ async function rodarCaptura(pasta) {
     await new Promise((res) => (janela.webContents.isLoading() ? janela.webContents.once('did-finish-load', res) : res()));
     await js(`document.getElementById('inicio').classList.add('oculto'); window.__jarvis.setEstado('espera');`);
     const tira = async (nome) => { const img = await janela.webContents.capturePage(); fs.writeFileSync(path.join(pasta, nome + '.png'), img.toPNG()); log('captura', nome); };
+    if (await js(`window.VISUAL || ''`) === 'aurora') return capturaAurora(js, tira, dorme, erros);
     for (let i = 0; i < 80; i++) { if (await js(`document.body.classList.contains('ui3d-ok')`)) break; await dorme(250); }       // a abertura conta a partir daqui
     await dorme(700); await tira('1-entrada-0.7s');
     await dorme(1000); await tira('2-entrada-1.7s');
@@ -469,6 +470,25 @@ async function rodarCaptura(pasta) {
     const info = await js(`window.Cena3D ? window.Cena3D.info() : null`);
     const corpo = await js(`document.body.className`);
     process.stdout.write('RESULTADO_CAPTURA ' + JSON.stringify({ info, corpo, arrasto, volta, erros: erros.slice(0, 12) }) + '\n');
+    saindo = true; pararServidor(); app.exit(0);
+}
+
+// visual Aurora (padrão): estados, chip de ferramenta, cartão de fontes, fala e cena 3D do clima, sem servidor de verdade fazendo nada
+async function capturaAurora(js, tira, dorme, erros) {
+    await dorme(1800); await tira('a1-espera');
+    await js(`__jarvis.setEstado('ouvindo')`); await dorme(1400); await tira('a2-ouvindo');
+    await js(`__jarvis.setEstado('pensando'); __jarvis.tratar({ tipo: 'ferramenta', id: 't1', rotulo: 'PESQUISA', detalhe: 'melhores notebooks 2026', estado: 'inicio' })`);
+    await dorme(1800); await tira('a3-pensando-pesquisa');
+    await js(`__jarvis.tratar({ tipo: 'ferramenta', id: 't1', estado: 'fim' }); __jarvis.tratar({ tipo: 'cartao', cartao: 'fontes', titulo: 'melhores notebooks 2026', fontes: [{ site: 'tecmundo.com.br', titulo: 'a' }, { site: 'canaltech.com.br', titulo: 'b' }, { site: 'tudocelular.com', titulo: 'c' }] })`);
+    await dorme(1700); await tira('a4-cartao');
+    await js(`__jarvis.setEstado('falando'); __jarvis.addJarvis('Achei três comparativos recentes; o mais completo é o do Tecmundo.')`); await dorme(1600); await tira('a5-falando');
+    await js(`__jarvis.setEstado('espera'); __jarvis.tratar({ tipo: 'cena', cena: 'clima', cidades: [
+        { nome: 'São Paulo', temp: 14, cond: 'nublado', nuvem: true, noite: true, hora: '21:00', descricao: 'nublado', max: 23, min: 14 },
+        { nome: 'Lisboa', temp: 13, cond: 'tempestade', nuvem: true, noite: true, hora: '01:00', descricao: 'trovoada', max: 20, min: 12 },
+        { nome: 'Tóquio', temp: 24, cond: 'limpo', nuvem: true, noite: false, hora: '09:00', descricao: 'poucas nuvens', max: 25, min: 17 }] })`);
+    await dorme(3200); await tira('a6-clima-3d');
+    const r = await js(`({ fps: Aurora.fps(), particulas: Aurora.particulas(), corpo: document.body.className, rotulos: document.querySelectorAll('.au-wlab').length })`);
+    process.stdout.write('RESULTADO_CAPTURA ' + JSON.stringify({ ...r, erros: erros.slice(0, 12) }) + '\n');
     saindo = true; pararServidor(); app.exit(0);
 }
 

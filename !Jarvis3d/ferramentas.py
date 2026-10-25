@@ -7,7 +7,8 @@ Regras de segurança:
   um nome da lista, nunca um comando.
 - Cofre: somente leitura, preso à pasta do cofre (ver cofre.py).
 - Arquivos e mouse/teclado ficam em pc.py, com confirmação do usuário imposta pelo código.
-- Não há ferramenta de terminal nem de apagar arquivos de vez.
+- Terminal e Oficina (terminal.py, oficina.py) também passam por pc.py, com a política de risco do seguranca_cmd.py.
+- Não há ferramenta de apagar arquivos de vez fora da Oficina.
 """
 
 import asyncio
@@ -43,7 +44,7 @@ def definicoes(programas: dict, tem_cofre: bool) -> list[dict]:
     ferramentas = [
         {
             "name": "pesquisar_web",
-            "description": "Pesquisa na internet num navegador visível na tela do usuário, abre o primeiro resultado e devolve o texto da página mais os outros resultados. Use para qualquer pergunta sobre fatos atuais, preços, pessoas, empresas ou quando pedirem para pesquisar/googlar.",
+            "description": "Pesquisa na internet (rápido, sem abrir janela; as páginas aparecem em miniatura num canto da tela do Jarvis), lê o primeiro resultado e devolve o texto da página mais os outros resultados. Use para qualquer pergunta sobre fatos atuais, preços, pessoas, empresas ou quando pedirem para pesquisar/googlar.",
             "input_schema": {
                 "type": "object",
                 "properties": {"consulta": {"type": "string", "description": "O que pesquisar."}},
@@ -120,7 +121,7 @@ def definicoes(programas: dict, tem_cofre: bool) -> list[dict]:
 def descrever(nome: str, entrada: dict) -> tuple[str, str]:
     """Rótulo curto para o painel de atividade: (tipo, detalhe)."""
     detalhe = entrada.get("consulta") or entrada.get("url") or entrada.get("tema") \
-        or entrada.get("busca") or entrada.get("nota") or entrada.get("programa")         or entrada.get("pasta") or entrada.get("pasta_origem") or entrada.get("pasta_pai") or entrada.get("titulo")         or entrada.get("objetivo") or entrada.get("acao") or entrada.get("combinacao") or entrada.get("comando") or entrada.get("texto") or ""
+        or entrada.get("busca") or entrada.get("nota") or entrada.get("programa") or entrada.get("caminho") or entrada.get("arquivo") or entrada.get("comando")         or entrada.get("pasta") or entrada.get("pasta_origem") or entrada.get("pasta_pai") or entrada.get("titulo")         or entrada.get("objetivo") or entrada.get("acao") or entrada.get("combinacao") or entrada.get("comando") or entrada.get("texto") or ""
     rotulos = {
         "pesquisar_web": "PESQUISA", "ler_pagina": "LEITURA", "abrir_site": "ABRINDO",
         "ver_tela": "VISÃO", "noticias": "NOTÍCIAS", "abrir_programa": "PROGRAMA",
@@ -191,6 +192,12 @@ def _pasta_cofre(config: dict) -> Path:
 
 # ---------------------------------------------------------------- navegador
 
+async def _pagina_escondida():
+    """A aba do navegador do Jarvis SEM trazer a janela para a frente (pesquisa/leitura não roubam a tela; o usuário abre pela miniatura)."""
+    import navegador
+    return await navegador.pagina(mostrar=False)
+
+
 async def _pagina_visivel():
     """A aba do navegador do Jarvis (Chrome dedicado, mesmo usado para YouTube e para operar páginas)."""
     import navegador
@@ -217,8 +224,41 @@ _RESULTADOS_DDG = """
 
 
 async def pesquisar_web(consulta: str) -> str:
+    """Busca por HTTP (DuckDuckGo HTML) e lê o 1º resultado legível, sem abrir o Chrome na frente do usuário (~1-3 s em vez de ~8 s).
+    Se a busca por HTTP não trouxer nada (bloqueio), cai para o navegador do Jarvis, minimizado."""
+    import httpx
+    import pesquisa
+    try:
+        async with httpx.AsyncClient(headers=pesquisa.CAB, timeout=httpx.Timeout(10.0, connect=5.0), follow_redirects=True) as cli:
+            resultados = await pesquisa._buscar_ddg(cli, consulta)
+            primeiro = None
+            if resultados:
+                # lê os 5 primeiros em paralelo e fica com o PRIMEIRO que responder legível (um site lento não segura a resposta)
+                tarefas = [asyncio.create_task(pesquisa._ler(cli, r)) for r in resultados[:5]]
+                try:
+                    for prox in asyncio.as_completed(tarefas, timeout=3.0):
+                        p = await prox
+                        if p:
+                            primeiro = p
+                            break
+                except asyncio.TimeoutError:
+                    pass
+                finally:
+                    for t in tarefas:
+                        t.cancel()
+    except Exception:
+        resultados, primeiro = [], None
+    if not resultados:
+        return await _pesquisar_web_navegador(consulta)
+    lista = "\n".join(f"- {r['titulo']} ({r['url']}): {r['resumo']}" for r in resultados)
+    texto = (f"\n\nTexto do primeiro resultado ({primeiro['titulo']}):\n{primeiro['texto'][:LIMITE_TEXTO]}" if primeiro
+             else "\n\n(Não consegui ler o texto das páginas; use os resumos acima ou ler_pagina.)")
+    return f"Resultados para '{consulta}':\n{lista}{texto}"
+
+
+async def _pesquisar_web_navegador(consulta: str) -> str:
     async with _trava_navegador:
-        pagina = await _pagina_visivel()
+        pagina = await _pagina_escondida()
         await pagina.goto(f"https://duckduckgo.com/?q={quote_plus(consulta)}&kl=br-pt", timeout=20000)
         try:
             await pagina.wait_for_selector('[data-testid="result-title-a"]', timeout=8000)
@@ -240,8 +280,18 @@ async def pesquisar_web(consulta: str) -> str:
 
 
 async def ler_pagina(url: str) -> str:
+    """Lê por HTTP (sem abrir janela); página que precisa de JavaScript cai para o navegador do Jarvis, minimizado."""
+    import httpx
+    import pesquisa
+    try:
+        async with httpx.AsyncClient(headers=pesquisa.CAB, timeout=httpx.Timeout(12.0, connect=5.0), follow_redirects=True) as cli:
+            lida = await pesquisa._ler(cli, {"url": url, "titulo": url})
+        if lida:
+            return f"{lida['titulo']}\n{url}\n\n{lida['texto'][:LIMITE_TEXTO]}"
+    except Exception:
+        pass
     async with _trava_navegador:
-        pagina = await _pagina_visivel()
+        pagina = await _pagina_escondida()
         await pagina.goto(url, timeout=20000, wait_until="domcontentloaded")
         await pagina.wait_for_timeout(1500)
         texto = await pagina.evaluate(_TEXTO_PRINCIPAL)

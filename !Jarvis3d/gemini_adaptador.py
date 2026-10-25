@@ -11,25 +11,45 @@ import httpx
 BASE_URL_OPENAI = "https://generativelanguage.googleapis.com/v1beta/openai"
 
 
-class ToolUseBlock:
+class _Bloco(dict):
+    """Bloco que funciona como objeto (b.name, b.type) E como dict (b.get, json.dumps). Precisa ser dict: quando o Gemini falha no meio
+    do pedido, o histórico com estes blocos vai para a reserva (SDK da Anthropic/DeepSeek), que só serializa dicts.
+    Antes era só objeto: 'ToolUseBlock is not JSON serializable' e "'ToolUseBlock' object has no attribute 'get'" derrubavam o turno."""
+
+    def __getattr__(self, nome):
+        try:
+            return self[nome]
+        except KeyError:
+            raise AttributeError(nome) from None
+
+
+class ToolUseBlock(_Bloco):
     def __init__(self, id: str, name: str, input_dict: dict, thought_signature: str = ""):
-        self.type = "tool_use"
-        self.id = id
-        self.name = name
-        self.input = input_dict
-        self.thought_signature = thought_signature
+        super().__init__(type="tool_use", id=id, name=name, input=input_dict if isinstance(input_dict, dict) else {})
+        self.__dict__["thought_signature"] = thought_signature     # atributo, não chave: a reserva recusaria um campo desconhecido
+
+    def __getattr__(self, nome):
+        if nome == "thought_signature":
+            return self.__dict__.get(nome, "")
+        return super().__getattr__(nome)
 
     def __repr__(self):
-        return f"ToolUseBlock(id={self.id!r}, name={self.name!r}, input={self.input!r})"
+        return f"ToolUseBlock(id={self['id']!r}, name={self['name']!r}, input={self['input']!r})"
 
 
-class TextBlock:
+class TextBlock(_Bloco):
     def __init__(self, text: str):
-        self.type = "text"
-        self.text = text
+        super().__init__(type="text", text=text)
 
     def __repr__(self):
-        return f"TextBlock({self.text!r})"
+        return f"TextBlock({self['text']!r})"
+
+
+def _campo(b, nome: str, padrao=None):
+    """Lê um campo de bloco seja ele objeto do SDK, dict ou _Bloco (sem cair no 'or b.get' quando o valor é vazio)."""
+    if isinstance(b, dict):
+        return b.get(nome, padrao)
+    return getattr(b, nome, padrao)
 
 
 class Usage:
@@ -86,15 +106,14 @@ def _converter_mensagens(mensagens: list, system=None) -> list:
             tool_calls = []
             tool_results = []
             for b in content:
-                b_type = getattr(b, "type", None) or (b.get("type") if isinstance(b, dict) else None)
+                b_type = _campo(b, "type")
                 if b_type == "text":
-                    t = getattr(b, "text", None) or (b.get("text", "") if isinstance(b, dict) else "")
-                    textos.append(t)
+                    textos.append(_campo(b, "text", "") or "")
                 elif b_type == "tool_use":
-                    b_id = getattr(b, "id", None) or b.get("id", "")
-                    b_name = getattr(b, "name", None) or b.get("name", "")
-                    b_inp = getattr(b, "input", None) or b.get("input", {})
-                    ts = getattr(b, "thought_signature", "") or (b.get("thought_signature", "") if isinstance(b, dict) else "")
+                    b_id = _campo(b, "id", "") or ""
+                    b_name = _campo(b, "name", "") or ""
+                    b_inp = _campo(b, "input", {}) or {}
+                    ts = getattr(b, "thought_signature", "") or ""
                     tc_dict = {
                         "id": b_id,
                         "type": "function",
@@ -104,8 +123,8 @@ def _converter_mensagens(mensagens: list, system=None) -> list:
                         tc_dict["extra_content"] = {"google": {"thought_signature": ts}}
                     tool_calls.append(tc_dict)
                 elif b_type == "tool_result":
-                    t_id = b.get("tool_use_id", "")
-                    t_c = b.get("content", "")
+                    t_id = _campo(b, "tool_use_id", "")
+                    t_c = _campo(b, "content", "")
                     if isinstance(t_c, list):
                         partes = []
                         for p in t_c:
@@ -116,7 +135,7 @@ def _converter_mensagens(mensagens: list, system=None) -> list:
                         t_c = " ".join(partes)
                     tool_results.append({"role": "tool", "tool_call_id": t_id, "content": str(t_c)})
                 elif b_type == "image":
-                    src = b.get("source", {})
+                    src = _campo(b, "source", {}) or {}
                     if src.get("type") == "base64":
                         mime = src.get("media_type", "image/jpeg")
                         data_b64 = src.get("data", "")
@@ -136,6 +155,48 @@ def _converter_mensagens(mensagens: list, system=None) -> list:
                 else:
                     res.append({"role": "user", "content": "\n".join(textos)})
     return res
+
+
+def _json_completo(texto: str) -> bool:
+    try:
+        json.loads(texto)
+        return True
+    except Exception:
+        return False
+
+
+def juntar_chamada(agg: dict, tc: dict):
+    """Soma um pedaço de tool_call do streaming na chamada certa. O Gemini manda chamadas PARALELAS inteiras, muitas vezes todas com
+    index 0 (ou sem index): somar pelo index colava os nomes ('trilha_sonoraterminal_executar') e a ferramenta "não existia".
+    Regra: id novo = chamada nova; sem id, um NOME chegando depois de uma chamada já completa (nome + JSON fechado) = chamada nova;
+    o resto (pedaços de argumentos) continua a chamada anterior."""
+    fn = tc.get("function") or {}
+    tid = tc.get("id") or ""
+    idx = tc.get("index")
+    chave = None
+    if tid:
+        chave = next((k for k, v in agg.items() if v["id"] == tid), None)
+    if chave is None and not tid and agg:
+        candidata = next((k for k, v in agg.items() if v.get("index") == idx), None) if idx is not None else None
+        candidata = candidata if candidata is not None else list(agg)[-1]
+        atual = agg[candidata]
+        completa = atual["name"] and (atual["arguments"] == "" or _json_completo(atual["arguments"]))
+        if not (fn.get("name") and completa and (atual["arguments"] or fn.get("arguments"))):
+            chave = candidata
+    if chave is None:
+        if not tid and not fn.get("name") and agg:
+            chave = list(agg)[-1]                                        # pedaço solto de argumentos: vai para a última
+        else:
+            chave = len(agg)
+            agg[chave] = {"id": tid or f"call_{chave}_{id(agg) % 10000}", "index": idx, "name": "", "arguments": "", "thought_signature": ""}
+    alvo = agg[chave]
+    extra = (tc.get("extra_content") or {}).get("google", {}) or {}
+    if extra.get("thought_signature"):
+        alvo["thought_signature"] = extra["thought_signature"]
+    if fn.get("name"):
+        alvo["name"] = fn["name"] if alvo["name"] and fn["name"].startswith(alvo["name"]) else alvo["name"] + fn["name"]
+    if fn.get("arguments"):
+        alvo["arguments"] += fn["arguments"]
 
 
 class _StreamContextManager:
@@ -194,25 +255,7 @@ class _StreamContextManager:
 
                     if delta.get("tool_calls"):
                         for tc in delta["tool_calls"]:
-                            idx = tc.get("index", 0)
-                            if idx not in tool_calls_agg:
-                                tool_calls_agg[idx] = {
-                                    "id": tc.get("id", f"call_{idx}"),
-                                    "name": "",
-                                    "arguments": "",
-                                    "thought_signature": ""
-                                }
-                            if tc.get("id"):
-                                tool_calls_agg[idx]["id"] = tc["id"]
-                            extra = tc.get("extra_content", {}).get("google", {})
-                            if extra.get("thought_signature"):
-                                tool_calls_agg[idx]["thought_signature"] = extra["thought_signature"]
-
-                            fn = tc.get("function", {})
-                            if fn.get("name"):
-                                tool_calls_agg[idx]["name"] += fn["name"]
-                            if fn.get("arguments"):
-                                tool_calls_agg[idx]["arguments"] += fn["arguments"]
+                            juntar_chamada(tool_calls_agg, tc)
             except Exception:
                 continue
 

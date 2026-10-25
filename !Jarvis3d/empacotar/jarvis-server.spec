@@ -8,6 +8,7 @@ RAIZ = SPECPATH + "\\.."
 
 datas = [
     (RAIZ + "\\frontend", "frontend"),
+    (RAIZ + "\\guarda", "guarda"),          # guarda dos scripts Python da Oficina (roda com o Python do usuário, não dentro do exe)
     (RAIZ + "\\personalidade.md", "."),
     (RAIZ + "\\config.example.json", "."),
     (RAIZ + "\\icone.ico", "."),

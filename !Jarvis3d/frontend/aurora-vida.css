@@ -1,0 +1,125 @@
+/* Visual AURORA, 2ª camada (2026-10-24): VIDA E TRANSPARÊNCIA. Linha de estado com equalizador, relógio nos chips, terminal ao vivo
+   (espelho da janela do PowerShell), cartão do código que ele escreveu na Oficina e confirmação com nível de risco. Só vale com body.aurora. */
+
+/* ---- linha de estado: diz o que ele está fazendo AGORA, com um equalizador que segue a voz */
+#au-status { position: fixed; top: 122px; left: 50%; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 9px; padding: 5px 14px 5px 11px;
+    border-radius: 99px; background: rgba(16, 18, 40, .38); border: 1px solid var(--au-gb); backdrop-filter: blur(14px); font-size: 11.5px; letter-spacing: .08em;
+    text-transform: lowercase; color: var(--au-dim); pointer-events: none; transition: color .4s, border-color .4s, background .4s; }
+body:not(.aurora) #au-status, body:not(.aurora) #au-terms { display: none; }
+#au-status b { font-weight: 500; }
+#au-status.troca b { animation: au-troca .45s cubic-bezier(.2, .9, .2, 1); }
+#au-status .eq { display: flex; align-items: center; gap: 2px; height: 12px; }
+#au-status .eq i { width: 2.5px; height: 100%; border-radius: 2px; background: currentColor; transform-origin: center; transform: scaleY(calc(.18 + var(--amp) * 1.4)); transition: transform .08s; }
+#au-status .eq i:nth-child(2) { transform: scaleY(calc(.25 + var(--amp) * 2.2)); }
+#au-status .eq i:nth-child(3) { transform: scaleY(calc(.3 + var(--amp) * 2.8)); }
+#au-status .eq i:nth-child(4) { transform: scaleY(calc(.22 + var(--amp) * 2)); }
+#au-status .eq i:nth-child(5) { transform: scaleY(calc(.16 + var(--amp) * 1.2)); }
+#au-status[data-e="espera"] .eq i { animation: au-resp 3.2s ease-in-out infinite; }
+#au-status[data-e="espera"] .eq i:nth-child(odd) { animation-delay: -.8s; }
+#au-status[data-e="ouvindo"] { color: var(--au-acc2); border-color: rgba(56, 225, 255, .35); }
+#au-status[data-e="pensando"] { color: #b9a6ff; border-color: rgba(185, 166, 255, .35); }
+#au-status[data-e="pensando"] .eq i, #au-status[data-e="term"] .eq i { animation: au-onda 1s ease-in-out infinite; }
+#au-status[data-e="pensando"] .eq i:nth-child(2), #au-status[data-e="term"] .eq i:nth-child(2) { animation-delay: .1s; }
+#au-status[data-e="pensando"] .eq i:nth-child(3), #au-status[data-e="term"] .eq i:nth-child(3) { animation-delay: .2s; }
+#au-status[data-e="pensando"] .eq i:nth-child(4), #au-status[data-e="term"] .eq i:nth-child(4) { animation-delay: .3s; }
+#au-status[data-e="pensando"] .eq i:nth-child(5), #au-status[data-e="term"] .eq i:nth-child(5) { animation-delay: .4s; }
+#au-status[data-e="falando"] { color: var(--au-ink); border-color: rgba(124, 140, 255, .45); }
+#au-status[data-e="term"] { color: var(--au-ok); border-color: rgba(91, 227, 168, .4); background: rgba(10, 40, 30, .45); }
+#au-status[data-e="conf"] { color: #ffc56b; border-color: rgba(255, 197, 107, .55); background: rgba(50, 34, 8, .55); text-transform: none; letter-spacing: .03em; }
+body.au-alerta-alto #au-status[data-e="conf"] { color: #ff8d9e; border-color: rgba(255, 107, 138, .6); background: rgba(55, 10, 20, .6); }
+@keyframes au-troca { from { opacity: 0; transform: translateY(4px); filter: blur(3px); } }
+@keyframes au-resp { 50% { transform: scaleY(.5); } }
+@keyframes au-onda { 50% { transform: scaleY(1); } }
+
+/* ---- chips: relógio, brilho enquanto trabalha e cor do resultado */
+.au-act { position: relative; overflow: hidden; }
+.au-act .au-tm { font-size: 11px; color: var(--au-dim); font-variant-numeric: tabular-nums; }
+.au-act .au-tm:empty { display: none; }
+.au-act::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0;
+    background: linear-gradient(100deg, transparent 30%, rgba(124, 140, 255, .18) 50%, transparent 70%); background-size: 220% 100%; }
+.au-act:not(.ok):not(.erro)::before { opacity: 1; animation: au-brilho 1.8s linear infinite; }
+.au-act.ok { border-color: rgba(91, 227, 168, .35); }
+.au-act.erro { border-color: rgba(255, 107, 138, .45); }
+@keyframes au-brilho { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+
+/* ---- terminal ao vivo (canto esquerdo, espelho da janela do PowerShell) */
+#au-terms { position: fixed; left: 22px; bottom: 112px; z-index: 6; display: flex; flex-direction: column; gap: 12px; pointer-events: none; }
+.au-term { width: clamp(300px, 30vw, 470px); border-radius: 18px; overflow: hidden; pointer-events: auto; color: var(--au-ink);
+    background: linear-gradient(180deg, rgba(8, 10, 24, .86), rgba(10, 12, 28, .78)); border: 1px solid var(--au-gb); backdrop-filter: blur(22px) saturate(1.4);
+    box-shadow: var(--au-shadow); transition: opacity .5s, transform .5s, border-color .4s, box-shadow .4s; }
+.au-term.rodando { border-color: rgba(91, 227, 168, .35); box-shadow: var(--au-shadow), 0 0 32px rgba(91, 227, 168, .12); }
+.au-term.ok { border-color: rgba(91, 227, 168, .5); }
+.au-term.erro { border-color: rgba(255, 107, 138, .55); box-shadow: var(--au-shadow), 0 0 30px rgba(255, 107, 138, .14); }
+.au-term.sai { opacity: 0; transform: translateX(-24px) scale(.96); }
+.au-th { display: flex; align-items: center; gap: 8px; padding: 10px 12px 8px 13px; font-size: 11.5px; letter-spacing: .04em; color: var(--au-dim); border-bottom: 1px solid rgba(160, 170, 255, .08); }
+.au-th svg { width: 15px; height: 15px; flex: none; stroke: var(--au-ok); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.au-th b { color: var(--au-ink); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.au-th .au-nv { flex: none; padding: 2px 8px; border-radius: 99px; background: var(--au-chip); font-size: 10px; white-space: nowrap; }
+.nv-risco .au-th .au-nv { background: rgba(255, 168, 92, .16); color: #ffc58a; }
+.nv-oficina .au-th .au-nv { background: rgba(91, 227, 168, .12); color: var(--au-ok); }
+.au-th .au-tt { margin-left: auto; flex: none; font-variant-numeric: tabular-nums; }
+.au-th .au-fechar { width: 20px; height: 20px; flex: none; border: 0; border-radius: 50%; background: none; color: var(--au-dim); font-size: 15px; line-height: 1; cursor: pointer; }
+.au-th .au-fechar:hover { background: var(--au-chip); color: var(--au-ink); }
+.au-tcmd { display: flex; gap: 8px; padding: 9px 13px 4px; font: 12px/1.45 "Cascadia Code", "Cascadia Mono", Consolas, monospace; }
+.au-tcmd span { color: var(--au-dim); flex: none; }
+.au-tcmd code { color: #ffd76b; white-space: pre-wrap; word-break: break-word; }
+.au-tout { max-height: min(32vh, 300px); overflow-y: auto; padding: 4px 13px 8px; font: 11.5px/1.5 "Cascadia Code", "Cascadia Mono", Consolas, monospace; color: #cfd6ff;
+    scrollbar-width: thin; scrollbar-color: rgba(160, 170, 255, .25) transparent; mask-image: linear-gradient(180deg, transparent 0, #000 14px); }
+.au-tout div { white-space: pre-wrap; word-break: break-word; animation: au-linha .35s cubic-bezier(.2, .9, .2, 1) backwards; }
+.au-tout div.err { color: #ff8d9e; }
+.au-tout div.ok { color: var(--au-ok); }
+@keyframes au-linha { from { opacity: 0; transform: translateX(-6px); filter: blur(2px); } }
+.au-tfoot { display: flex; align-items: center; gap: 8px; padding: 7px 13px 9px; font-size: 11px; color: var(--au-dim); border-top: 1px solid rgba(160, 170, 255, .07); }
+.au-led { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--au-dim); }
+.au-term.rodando .au-led { background: var(--au-ok); box-shadow: 0 0 10px var(--au-ok); animation: au-pulso 1.1s ease-in-out infinite; }
+.au-term.ok .au-led { background: var(--au-ok); }
+.au-term.erro .au-led { background: var(--au-err); box-shadow: 0 0 10px var(--au-err); }
+.au-term.rodando .au-tout::after { content: "\258D"; color: var(--au-ok); animation: au-cursor 1s steps(1) infinite; }
+@keyframes au-pulso { 50% { opacity: .35; transform: scale(.8); } }
+@keyframes au-cursor { 50% { opacity: 0; } }
+
+/* ---- cartão do código que ele acabou de escrever na Oficina (as linhas aparecem como se fossem digitadas) */
+.au-cw.au-cw-code { width: clamp(280px, 27vw, 430px); }
+.au-csub { display: flex; align-items: center; gap: 8px; margin: -5px 0 9px; font-size: 11px; color: var(--au-dim); }
+.au-tag { padding: 1px 8px; border-radius: 99px; background: var(--au-chip); color: var(--au-ink); font-size: 10px; letter-spacing: .05em; }
+.au-tag.novo { background: rgba(91, 227, 168, .16); color: var(--au-ok); }
+.au-code { margin: 0; max-height: min(34vh, 330px); overflow: hidden; font: 11px/1.55 "Cascadia Code", "Cascadia Mono", Consolas, monospace; color: #d7dcff;
+    mask-image: linear-gradient(180deg, #000 78%, transparent); }
+.au-code .ln { display: block; white-space: pre; overflow: hidden; text-overflow: ellipsis; animation: au-digita .5s steps(18, end) var(--d) backwards; }
+.au-code .ln i { display: inline-block; width: 2.4em; margin-right: .8em; text-align: right; font-style: normal; color: rgba(233, 236, 255, .25); }
+.au-code b.k { font-weight: 600; color: #b9a6ff; }
+.au-code em.cm { font-style: italic; color: rgba(150, 230, 190, .75); }
+@keyframes au-digita { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+
+/* ---- confirmação: o nível de risco aparece na cor, no selo, na borda que gira e no que ela pede para você dizer */
+@property --au-ang { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+body.aurora .conf-caixa { position: relative; overflow: hidden; }
+body.aurora .conf-caixa::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; padding: 1.5px;
+    background: conic-gradient(from var(--au-ang), rgba(255, 197, 107, 0), rgba(255, 197, 107, .75), rgba(255, 197, 107, 0) 40%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: au-giro 3s linear infinite; }
+body.aurora #confirmacao.alto .conf-caixa { border-color: rgba(255, 107, 138, .5); box-shadow: var(--au-shadow), 0 0 60px rgba(255, 92, 112, .18); }
+body.aurora #confirmacao.alto .conf-caixa::before { background: conic-gradient(from var(--au-ang), rgba(255, 92, 112, 0), rgba(255, 92, 112, .9), rgba(255, 92, 112, 0) 40%); }
+body.aurora #confirmacao.alto .conf-selo { color: #ff8d9e; }
+#conf-detalhes li.conf-risco { color: #ff9aa9; }
+#conf-detalhes li.conf-risco::before { content: "\26A0  "; }
+#conf-detalhes li.conf-cmd { font-family: "Cascadia Code", Consolas, monospace; color: #ffd76b; word-break: break-word; }
+.conf-ouvindo { display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 11px; letter-spacing: .12em; color: #38e1ff; text-transform: uppercase; }
+.conf-ouvindo i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; animation: au-pulso 1.2s ease-in-out infinite; }
+.conf-ouvindo i:nth-child(2) { animation-delay: .2s; }
+.conf-ouvindo i:nth-child(3) { animation-delay: .4s; margin-right: 6px; }
+#conf-dica.pisca { animation: au-dica .9s ease 2; color: #ffd76b; }
+@keyframes au-dica { 50% { transform: scale(1.06); } }
+@keyframes au-giro { to { --au-ang: 360deg; } }
+
+/* o fundo esquenta junto com a nuvem enquanto ele espera o seu sim/não */
+#au-bg .blob { transition: background 1.2s ease; }
+body.au-alerta #au-bg .b1 { background: #8a4b00; }
+body.au-alerta #au-bg .b2 { background: #b06a00; }
+body.au-alerta-alto #au-bg .b1 { background: #7a1028; }
+body.au-alerta-alto #au-bg .b2 { background: #a3263b; }
+
+@media (prefers-reduced-motion: reduce) {
+    #au-status .eq i, .au-act::before, .au-tout div, .au-code .ln, .au-led, body.aurora .conf-caixa::before, .conf-ouvindo i { animation: none !important; }
+}
+@media (max-width: 900px) { #au-terms { left: 10px; right: 10px; } .au-term { width: auto; } }
+body.aurora #au-acts { top: 162px; }

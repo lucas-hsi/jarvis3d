@@ -22,7 +22,7 @@ DEFINICAO = {
     "name": "pesquisa_profunda",
     "description": ("Pesquisa um tema a fundo na web: planeja subperguntas, busca várias fontes em paralelo, lê as páginas e entrega uma síntese com fontes numeradas, "
                     "pontos de divergência e grau de certeza. Use para comparar produtos, entender um assunto, checar fatos atuais, preço, notícia, decisão de compra. "
-                    "Demora ~15-40 s: diga uma frase curta antes. Para uma resposta simples use pesquisar_web."),
+                    "Demora ~15-40 s (a tela mostra o progresso; não anuncie). Para uma resposta simples use pesquisar_web."),
     "input_schema": {"type": "object", "properties": {
         "tema": {"type": "string", "description": "a pergunta ou tema completo, com o contexto necessário"},
         "profundidade": {"type": "string", "enum": ["rapida", "normal", "profunda"], "description": "padrão normal"}}, "required": ["tema"]},
@@ -41,6 +41,8 @@ async def _buscar_ddg(cli: httpx.AsyncClient, consulta: str, n: int = 6) -> list
         if not href.startswith("http") or "duckduckgo.com" in href:
             continue
         sn = no.xpath('.//*[contains(@class,"result__snippet")]')
+        if any(s["url"] == href for s in saida):              # o HTML do DuckDuckGo tem divs "result" aninhadas: o mesmo link vinha 2-3 vezes
+            continue
         saida.append({"titulo": a.text_content().strip(), "url": href, "resumo": sn[0].text_content().strip() if sn else ""})
         if len(saida) >= n:
             break

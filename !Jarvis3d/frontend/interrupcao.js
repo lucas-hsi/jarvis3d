@@ -50,7 +50,28 @@
         return { acao: 'ignorar', motivo: 'poucas palavras novas', eco, novas };
     }
 
-    const api = { decidir, sobreposicao, ehPedidoDeParar, norm };
+    /**
+     * Resposta falada a um pedido de confirmação. nivel 'medio' aceita sim/pode/isso; 'alto' (ação arriscada) só "confirmo"/"autorizo"/"pode executar".
+     * Devolve true, false, 'fraco' (disse "sim" num pedido ALTO), 'ambiguo' (sim e não juntos) ou null (não entendi). Na dúvida, NUNCA confirma.
+     */
+    function confirmacao(texto, nivel) {
+        const t = ' ' + norm(texto) + ' ';
+        const nega = /\b(nao|cancela\w*|negativo|pare|parar|para tudo|deixa (pra la|quieto)|esquece|desiste|nem pensar|de jeito nenhum|espera|aguarda)\b/.test(t);
+        const forte = /\b(confirm\w*|com firmo|conformo|autoriz\w*|pode (executar|seguir|rodar|apagar|instalar|fazer|continuar|mandar|ir))\b/.test(t);
+        const fraco = forte || /\b(sim|pode|isso|vai|manda|faz|faca|ok|okay|beleza|claro|positivo|bora|certo|segue|prossiga|fechado|show)\b/.test(t);
+        if (nega && fraco) return 'ambiguo';
+        if (nega) return false;
+        if (nivel === 'alto') return forte ? true : (fraco ? 'fraco' : null);
+        return fraco ? true : null;
+    }
+
+    /** O que o microfone ouviu durante/logo depois do Jarvis LER o pedido de confirmação é eco dele? ("diga confirmo, ou cancela") */
+    function ecoDaConfirmacao(texto, pedidoFalado) {
+        if (/\bdiga\b/.test(norm(texto))) return true;
+        return palavras(texto).length >= 3 && sobreposicao(texto, pedidoFalado) >= 0.6;
+    }
+
+    const api = { decidir, sobreposicao, ehPedidoDeParar, norm, confirmacao, ecoDaConfirmacao };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     else raiz.Interrupcao = api;
 })(typeof window !== 'undefined' ? window : globalThis);

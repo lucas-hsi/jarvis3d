@@ -38,9 +38,34 @@ import caminhos
 TAXA = 16000
 QUADRO = 320                                  # 20 ms a 16 kHz
 MODELO_PADRAO = "small"
+MODELO_PRECISO = "large-v3-turbo"            # ~1,6 GB, entende bem melhor o português; vale com placa NVIDIA (baixado só se o usuário pedir em /configurar)
 VOCABULARIO = ("YouTube, Gmail, Obsidian, Mercado Livre, WhatsApp, "
-               "Spotify, Chrome, Bloco de Notas, agenda, e-mail, Downloads, Documentos.")
+               "Spotify, Chrome, Bloco de Notas, agenda, e-mail, Downloads, Documentos, PowerShell, Python, VS Code, GitHub, Oficina.")
 HOTWORDS = "Jarvis"
+
+# Termos técnicos que o Whisper costuma ouvir torto em português (só palavras inteiras; o resto do texto não muda)
+CORRECOES = [
+    (re.compile(r"\b(pai ?t[oô]n|paiton|p[aá]iton|piton|python)\b", re.IGNORECASE), "Python"),
+    (re.compile(r"\b(p[aáo]u?w?[eê]r ?(x|sh|ch)[eé]l+)\b", re.IGNORECASE), "PowerShell"),
+    (re.compile(r"\b(e?scr[ií]pi?t[ei]?|iscript|scripit)(s?)\b", re.IGNORECASE), r"script\2"),
+    (re.compile(r"\b(vs ?code|vi ?es ?code|v[eê] ?esse ?code|visual studio code)\b", re.IGNORECASE), "VS Code"),
+    (re.compile(r"\b(git ?hub|guit ?hub|guiti ?hub)\b", re.IGNORECASE), "GitHub"),
+    (re.compile(r"\bjava ?script\b", re.IGNORECASE), "JavaScript"),
+    (re.compile(r"\b(of[ií]cina do jarvis|oficina do jarves)\b", re.IGNORECASE), "Oficina do Jarvis"),
+]
+
+
+def corrigir_termos(texto: str) -> str:
+    for rx, certo in CORRECOES:
+        texto = rx.sub(certo, texto)
+    return texto
+
+
+def modelo_escolhido(cfg: dict) -> str:
+    """O que o usuário escolheu ("stt_modelo"); sem escolha, o preciso se ele já foi baixado; senão o small."""
+    if cfg.get("stt_modelo"):
+        return str(cfg["stt_modelo"])
+    return MODELO_PRECISO if modelo_em_disco(MODELO_PRECISO) else MODELO_PADRAO
 # Como o Whisper costuma errar o nome no INÍCIO da fala (nunca mexe no meio do texto)
 _NOME_ERRADO = re.compile(r"^\W*(jarves|j[aá]rvi|g[aá]rvis|g[eé]rvis|j[aá]rbis|d?j[aá]rvez|servis|reci|jarvice|jarvi?s)\b[\s,.!?:;-]*", re.IGNORECASE)
 
@@ -64,7 +89,8 @@ ALUCINACOES = re.compile(r"legendas? (pela|por|de) |amara\.org|obrigad[oa] por a
                          r"^(tchau\.?|ok\.?|hum+\.?|ah+\.?|uh+\.?|obrigad[oa]\.?|e aí\.?|então\.?)$", re.IGNORECASE)
 # Falas de uma palavra só que valem como comando (o resto de uma palavra sozinha é quase sempre ruído)
 UMA_PALAVRA_OK = {"para", "pare", "parar", "chega", "espera", "espere", "aguarda", "aguarde", "calma", "sim", "nao", "confirmo", "cancela",
-                  "cancelar", "jarvis", "silencio", "continua", "continue", "proxima", "anterior", "pausa", "pausar"}
+                  "cancelar", "jarvis", "silencio", "continua", "continue", "proxima", "anterior", "pausa", "pausar",
+                  "confirma", "confirmado", "autorizo", "pode", "negativo", "cancelado", "isso", "beleza", "claro", "positivo"}
 
 # Provas de "isto é fala": quanto maior a sensibilidade, mais permissivas (e mais falsos disparos)
 PRESETS = {
@@ -190,13 +216,13 @@ class Transcritor:
             folga = np.zeros(int(0.3 * TAXA), dtype=np.float32)
             x = np.concatenate([folga, x, folga])
         segs, _info = self.m.transcribe(
-            x, language="pt", beam_size=1 if curto else 3, hotwords=HOTWORDS, vad_filter=not curto, vad_parameters={"min_silence_duration_ms": 300},
+            x, language="pt", beam_size=2 if curto else 4, hotwords=HOTWORDS, vad_filter=not curto, vad_parameters={"min_silence_duration_ms": 300},
             condition_on_previous_text=False, temperature=0.0, no_speech_threshold=0.5, log_prob_threshold=-1.0,
             compression_ratio_threshold=2.2, without_timestamps=True, initial_prompt=self.vocabulario or None)
         lista = list(segs)
         if not lista:
             return "", 0.0, "sem fala reconhecida"
-        texto = corrigir_nome(" ".join(s.text.strip() for s in lista).strip())
+        texto = corrigir_termos(corrigir_nome(" ".join(s.text.strip() for s in lista).strip()))
         logprob = sum(s.avg_logprob for s in lista) / len(lista)
         sem_fala = max(s.no_speech_prob for s in lista)
         confianca = max(0.0, min(1.0, math.exp(logprob)))

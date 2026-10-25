@@ -18,18 +18,19 @@ GRUPOS_ORDEM = ("nucleo", "arquivos", "pc", "navegador", "google", "camera", "in
 NUCLEO = {
     "pesquisar_web", "ler_pagina", "abrir_site", "ver_tela", "noticias", "abrir_programa", "consultar_cofre", "ler_nota",
     "controlar_volume", "controlar_midia", "lembrar", "buscar_memoria", "esquecer_memoria", "anotar_no_cofre",
-    "acrescentar_no_cofre", "trilha_sonora", "encerrar_conversa", "dormir", "habilitar_ferramentas", "briefing", "pensar_fundo", "modo_especialista", "pesquisa_profunda", "lembrete_voz", "vigiar_cotacao", "rotina_salvar", "rotina_executar", "proativo_gerenciar",
+    "acrescentar_no_cofre", "trilha_sonora", "encerrar_conversa", "dormir", "habilitar_ferramentas", "briefing", "pensar_fundo", "modo_especialista", "pesquisa_profunda", "lembrete_voz", "vigiar_cotacao", "rotina_salvar", "rotina_executar", "proativo_gerenciar", "mostrar_clima",
 }
 ARQUIVOS = {"listar_pasta", "organizar_pasta", "mover_itens", "renomear_item", "criar_pasta", "mover_para_lixo",
             "desfazer_organizacao", "abrir_pasta", "ler_documento", "criar_documento", "buscar_documentos"}
 PC = {"listar_janelas", "gerenciar_janela", "mostrar_area_de_trabalho", "bloquear_tela", "iniciar_controle", "clicar",
-      "digitar", "pressionar_teclas", "rolar", "janela_ver", "janela_acao", "terminal_executar"}
+      "digitar", "pressionar_teclas", "rolar", "janela_ver", "janela_acao", "terminal_executar",
+      "oficina_escrever", "oficina_rodar", "oficina_ler", "oficina_listar", "oficina_abrir"}
 CAMERA = {"ver_camera", "modo_gravacao"}
 NAVEGADOR_EXTRA = {"youtube_buscar", "video_controle"}
 
 DESCRICAO_GRUPOS = {
     "arquivos": "listar, organizar, mover, renomear e mandar para o lixo arquivos e pastas (Downloads, Documentos, Área de Trabalho)",
-    "pc": "janelas do Windows, clicar/digitar em programas (janela_ver/janela_acao), mouse, teclado, bloquear a tela",
+    "pc": "janelas do Windows, clicar/digitar em programas (janela_ver/janela_acao), mouse, teclado, bloquear a tela, terminal PowerShell visível e a OFICINA (criar/rodar arquivos, scripts e pequenos programas)",
     "navegador": "YouTube e música, controle de vídeo, abrir e operar sites no navegador do Jarvis",
     "google": "Google Agenda, Gmail e Drive",
     "camera": "webcam (olhar roupa/objetos) e modo gravação de vídeo",
@@ -66,7 +67,9 @@ GATILHOS = {
     "arquivos": re.compile(r"pasta|arquivo|download|documento|organiz|renome|lixeira|lixo|desfaz|\bmov[ae]|imagens|\bpdf|baixad|planilha|excel|\bword\b|docx|xlsx|relatorio|contrato|curriculo|resum[ae]|\bler\b|le o|onde (esta|ficou)|acha"),
     "pc": re.compile(r"janela|minimiz|maximiz|\bfech|clic|digit|escrev|\btecla|atalho|mouse|\brol(e|ar)|desktop|area de trabalho|"
                      r"bloque|\btela|programa|aplicativ|\bapp\b|botao|\bmenu|instal|configurac|painel de controle|abr[ae]|"
-                     r"word|excel|bloco de notas|explorador|calculadora|whatsapp|discord|spotify|obs\b|vscode|terminal|comando|powershell|\bcmd\b|\bpip\b|\bnpm\b|\bgit\b|executa|roda o|instala"),
+                     r"word|excel|bloco de notas|explorador|calculadora|whatsapp|discord|spotify|obs\b|vscode|terminal|comando|powershell|power ?xel|\bcmd\b|\bpip\b|\bnpm\b|\bgit\b|executa|roda o|roda a|instala|"
+                     r"script|escript|python|paiton|codigo|programinha|sistema|oficina|automatiz|desenvolv|\bcri[ae]r?\b|\bcrie\b|\bfaz (um|uma)\b|"
+                     r"arquivo|\.py\b|html|site simples|calculadora|aplicac|ferramenta pra|bot\b|planilha automat"),
     "navegador": re.compile(r"youtube|music|\bsom\b|toc[ae]|toque|video|\bpul[ae]|proxim|anterior|pausa|continu|anunci|\bsite|pagina|"
                             r"navegador|\baba|pesquis|google|\blink|login|entra |compr|playlist|letra|\bclip|\bbusca|procura|"
                             r"mercado livre|olx|amazon|instagram|facebook|linkedin|\bweb\b|internet|\bhttp|\.com"),

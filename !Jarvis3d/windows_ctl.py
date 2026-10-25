@@ -248,6 +248,20 @@ def acao_na_janela(trecho: str, acao: str) -> str:
     return titulo
 
 
+def trazer_sem_foco(trecho: str) -> bool:
+    """Põe a janela cujo título contém `trecho` por cima das outras, SEM ativá-la (o teclado continua onde estava).
+    Usado pela Oficina para o usuário VER o PowerShell trabalhando. True se achou a janela."""
+    alvo = next((h for h, t in listar_janelas() if trecho.lower() in t.lower()), None)
+    if alvo is None:
+        return False
+    if user32.IsIconic(alvo):
+        user32.ShowWindow(alvo, 4)                              # SW_SHOWNOACTIVATE
+    sem = 0x0001 | 0x0002 | 0x0010                              # SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE
+    user32.SetWindowPos(ctypes.c_void_p(alvo), ctypes.c_void_p(-1), 0, 0, 0, 0, sem)              # HWND_TOPMOST: sobe na pilha...
+    user32.SetWindowPos(ctypes.c_void_p(alvo), ctypes.c_void_p(-2), 0, 0, 0, 0, sem)              # ...HWND_NOTOPMOST: e não fica grudada por cima para sempre
+    return True
+
+
 def mostrar_area_de_trabalho():
     pressionar("win+d")
 

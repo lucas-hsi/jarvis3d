@@ -1,6 +1,7 @@
 """
 Baixa, SOB PEDIDO do usuário (assistente de primeira execução / página /configurar), o que não cabe no instalador:
   whisper    reconhecimento de voz próprio (Hugging Face, ~480 MB)
+  whisper_preciso  Whisper large-v3-turbo (~1,6 GB): entende bem melhor; usado sozinho quando baixado (precisa de placa NVIDIA para ser rápido)
   embeddings memória por significado (Hugging Face, ~220 MB, opcional)
   cuda       bibliotecas NVIDIA para o Whisper rodar na placa de vídeo (~1,1 GB, PyPI, opcional; sem elas roda na CPU)
 O Jarvis em si nunca baixa nada sozinho: só esta rotina, quando o usuário clica. O CUDA vem com conferência de SHA-256 do PyPI.
@@ -47,6 +48,7 @@ def estado() -> dict:
     import stt
     return {
         "whisper": stt.modelo_em_disco(stt.MODELO_PADRAO),
+        "whisper_preciso": stt.modelo_em_disco(stt.MODELO_PRECISO),
         "chamado": all((stt.pasta_chamado() / a).exists() for a in stt.ARQUIVOS_CHAMADO),
         "vozlocal": __import__("voz_local").disponivel(),
         "embeddings": any((caminhos.DADOS / "memoria" / "modelos").glob("models--*MiniLM*")),
@@ -105,24 +107,25 @@ def _instalar_cuda():
     shutil.rmtree(tmp, ignore_errors=True)
 
 
-def _instalar_whisper():
+def _instalar_whisper(modelo: str = "", mb: int = 480):
     import stt
     from faster_whisper.utils import download_model
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
     destino = stt.pasta_modelos()
     destino.mkdir(parents=True, exist_ok=True)
     parar = threading.Event()
+    ja_tinha = sum(f.stat().st_size for f in destino.rglob("*") if f.is_file())     # outro modelo já baixado não conta no progresso
 
-    def acompanhar():                                       # o Hugging Face não dá progresso fácil: mede a pasta crescendo (~480 MB)
+    def acompanhar():                                       # o Hugging Face não dá progresso fácil: mede a pasta crescendo
         while not parar.is_set():
-            tam = sum(f.stat().st_size for f in destino.rglob("*") if f.is_file())
-            _definir(fase=f"baixando o Whisper ({tam // (1 << 20)} de ~480 MB)", pct=min(97.0, round(tam / (480 * (1 << 20)) * 100, 1)))
+            tam = max(0, sum(f.stat().st_size for f in destino.rglob("*") if f.is_file()) - ja_tinha)
+            _definir(fase=f"baixando o Whisper ({tam // (1 << 20)} de ~{mb} MB)", pct=min(97.0, round(tam / (mb * (1 << 20)) * 100, 1)))
             time.sleep(1)
     threading.Thread(target=acompanhar, daemon=True).start()
     try:
         for tentativa in range(1, 5):
             try:
-                download_model(stt.MODELO_PADRAO, cache_dir=str(destino))
+                download_model(modelo or stt.MODELO_PADRAO, cache_dir=str(destino))
                 return
             except Exception:
                 if tentativa == 4:
@@ -177,7 +180,7 @@ def _instalar_vozlocal():
 
 def baixar(item: str) -> bool:
     """Começa o download em segundo plano. Devolve False se já há um em andamento ou o item é desconhecido."""
-    rotinas = {"vozlocal": _instalar_vozlocal, "chamado": _instalar_chamado, "whisper": _instalar_whisper, "embeddings": _instalar_embeddings, "cuda": _instalar_cuda}
+    rotinas = {"vozlocal": _instalar_vozlocal, "chamado": _instalar_chamado, "whisper": _instalar_whisper, "whisper_preciso": lambda: _instalar_whisper(__import__("stt").MODELO_PRECISO, 1550), "embeddings": _instalar_embeddings, "cuda": _instalar_cuda}
     if item not in rotinas or not _trava.acquire(blocking=False):
         return False
 

@@ -55,6 +55,7 @@
   <h2>2 · Voz e memória (downloads de uma vez só)</h2>
   <p class="mini" style="margin-top:0">O reconhecimento de voz roda no seu computador (nada do que você fala vai para a nuvem para ser transcrito). Estes arquivos não vêm dentro do instalador por serem grandes.</p>
   <div class="item"><div><b>Reconhecimento de voz (Whisper)</b><div class="mini">~480 MB · necessário para falar com o Jarvis</div></div><div><span id="t-whisper" class="tag info">—</span> <button id="b-whisper">Baixar</button></div></div>
+  <div class="item"><div><b>Reconhecimento de voz PRECISO (Whisper large-v3-turbo)</b><div class="mini">~1,6 GB · opcional · entende bem melhor o que você fala (menos palavras trocadas); quando baixado, passa a ser usado sozinho no próximo início. Recomendado com placa NVIDIA (na CPU fica lento)</div></div><div><span id="t-whisper_preciso" class="tag info">—</span> <button id="b-whisper_preciso">Baixar</button></div></div>
   <div class="item"><div><b>Palavra de ativação "hey Jarvis"</b><div class="mini">~4 MB · opcional · chama o Jarvis mesmo quando a transcrição erra o nome</div></div><div><span id="t-chamado" class="tag info">—</span> <button id="b-chamado">Baixar</button></div></div>
   <div class="item"><div><b>Voz local gratuita (reserva)</b><div class="mini">~120 MB · opcional · o Jarvis fala por ela quando a ElevenLabs falha ou acaba o crédito (português do Brasil, sem custo)</div></div><div><span id="t-vozlocal" class="tag info">—</span> <button id="b-vozlocal">Baixar</button></div></div>
   <div class="item"><div><b>Memória por significado</b><div class="mini">~220 MB · opcional (sem ela a busca é por palavras)</div></div><div><span id="t-embeddings" class="tag info">—</span> <button id="b-embeddings">Baixar</button></div></div>
@@ -86,13 +87,14 @@ async function atualizar() {
   let e;
   try { e = await (await fetch('/api/configurar/estado')).json(); } catch (_) { return; }
   etiqueta($('t-whisper'), e.whisper, 'instalado', 'falta', 'erro');
+  etiqueta($('t-whisper_preciso'), e.whisper_preciso, 'instalado', 'não instalado', 'info');
   etiqueta($('t-vozlocal'), e.vozlocal, 'instalado', 'não instalado', 'info');
   etiqueta($('t-chamado'), e.chamado, 'instalado', 'não instalado', 'info');
   etiqueta($('t-embeddings'), e.embeddings, 'instalado', 'não instalado', 'info');
   $('linha-cuda').style.display = e.nvidia ? '' : 'none';
   etiqueta($('t-cuda'), e.cuda, 'instalado', 'não instalado', 'info');
   const p = e.progresso || {}, ocupado = !!p.ocupado;
-  for (const b of ['whisper', 'chamado', 'vozlocal', 'embeddings', 'cuda']) $('b-' + b).disabled = ocupado || e[b];
+  for (const b of ['whisper', 'whisper_preciso', 'chamado', 'vozlocal', 'embeddings', 'cuda']) $('b-' + b).disabled = ocupado || e[b];
   $('prog').style.width = (p.pct || 0) + '%';
   $('prog-texto').textContent = p.erro ? 'Falhou: ' + p.erro + ' (clique em Baixar para tentar de novo)' : ocupado ? (p.fase || '...') : (p.fase === 'pronto' ? 'pronto' : 'nenhum download em andamento');
   $('estado-chaves').textContent = (e.tem_anthropic ? '✓ chave da Anthropic salva' : '✗ falta a chave da Anthropic') + ' · ' + (e.tem_eleven ? '✓ chave da ElevenLabs salva' : 'sem ElevenLabs (voz do Windows)');
@@ -116,7 +118,7 @@ $('b-salvar').addEventListener('click', async () => {
   $('r-salvar').textContent = r.ok ? 'Salvo. Os campos de chave foram esvaziados por segurança.' : ('Não salvou: ' + (r.erro || 'erro'));
   if (r.ok) { $('k-anthropic').value = ''; $('k-eleven').value = ''; $('k-deepseek').value = ''; atualizar(); }
 });
-for (const item of ['whisper', 'chamado', 'vozlocal', 'embeddings', 'cuda']) $('b-' + item).addEventListener('click', async () => { await post('/api/configurar/baixar', { item }); atualizar(); });
+for (const item of ['whisper', 'whisper_preciso', 'chamado', 'vozlocal', 'embeddings', 'cuda']) $('b-' + item).addEventListener('click', async () => { await post('/api/configurar/baixar', { item }); atualizar(); });
 $('b-reiniciar').addEventListener('click', async () => {
   $('b-reiniciar').disabled = true; $('r-reiniciar').textContent = 'Reiniciando...';
   await post('/api/configurar/reiniciar');

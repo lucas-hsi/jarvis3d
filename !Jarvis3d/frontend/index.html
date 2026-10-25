@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="/static/tema3d.css">
     <link rel="stylesheet" href="/static/acoes.css">
     <link rel="stylesheet" href="/static/moderno.css">
+    <link rel="stylesheet" href="/static/aurora.css">
+    <link rel="stylesheet" href="/static/aurora-vida.css">
     <script type="importmap">{"imports":{"three":"/static/vendor/three/three.module.js","three/addons/":"/static/vendor/three/addons/"}}</script>
 </head>
 <body data-estado="offline" data-tema="ciano" class="boot">
@@ -155,7 +157,8 @@
                 <button id="conf-nao" type="button">CANCELAR</button>
                 <button id="conf-sim" type="button">CONFIRMAR</button>
             </div>
-            <p>ou diga <em>confirmo</em> / <em>cancela</em></p>
+            <div class="conf-ouvindo"><i></i><i></i><i></i><span>ouvindo sua resposta</span></div>
+            <p id="conf-dica">ou diga <em>confirmo</em> / <em>cancela</em></p>
         </div>
     </div>
 
@@ -184,6 +187,7 @@
     </div>
 
     <script src="/static/reator.js"></script>
+    <script src="/static/aurora.js"></script>
     <script src="/static/ponte3d.js"></script>
     <script src="/static/sfx.js"></script>
     <script src="/static/graficos.js"></script>

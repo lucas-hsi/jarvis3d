@@ -622,10 +622,17 @@
                     if (conversaEncerrada) { /* já despediu: o próximo turno encerra */ } else janelaAte = performance.now() + janelaConversaMs;
                 }
                 if (confirmacao) {
-                    const resp = interpretarConfirmacao(texto);
+                    // eco: a voz do Jarvis LENDO o pedido ("diga confirmo, ou cancela") não pode responder por você
+                    const falouAgora = falandoAgora() || agora - fimDaFalaEm < GRACA_ECO_MS;
+                    const pedidoFalado = (legendaJarvis.join(' ') + ' ' + ultimoFalado).trim();
+                    if (falouAgora && Interrupcao.ecoDaConfirmacao(texto, pedidoFalado)) {
+                        decisao(r, 'ignorou', 'eco do pedido de confirmação'); continue;
+                    }
+                    const resp = interpretarConfirmacao(texto, confirmacao.nivel);
                     mostrarVoce(texto, false);
-                    if (resp !== null) responderConfirmacao(resp);
-                } else if (texto.length > 1) { decisao(r, 'enviou', naJanela() ? 'dentro da conversa' : 'chamou pelo nome'); enviarFala(texto); }
+                    if (resp === true || resp === false) responderConfirmacao(resp);
+                    else dicaConfirmacao(resp, texto);
+                } else if (texto.length > 1) { decisao(r, 'enviou', naJanela() ? 'dentro da conversa' : 'chamou pelo nome'); enviarFala(texto, null, r.confidence); }
             } else {
                 parcial += r.transcript;
             }
@@ -771,6 +778,8 @@
             case 'ferramenta':
                 pintarFerramenta(msg);
                 if (window.Acoes) Acoes.evento(msg);
+                if (window.Aurora) Aurora.ferramenta(msg);
+                if (msg.estado === 'inicio' && FERRAMENTA_LENTA.has(String(msg.rotulo || '').toUpperCase()) && !T.falaRecebidaEm && !tocando) agendarFiller();
                 if (msg.estado === 'inicio') ativarPaineis(PAINEL_DO_ROTULO[msg.rotulo] || ['nucleo'], 4);
                 if (msg.estado === 'erro') Sfx.tocar('erro');
                 else if (msg.estado === 'fim') Sfx.tocar('ok');
@@ -803,6 +812,17 @@
                 Sfx.tocar(msg.ativo ? 'controle_on' : 'controle_off');
                 break;
             case 'aviso': aviso(msg.texto); break;
+            case 'cena': if (window.Aurora) Aurora.cena(msg); break;          // visual Aurora: cena 3D por assunto (clima)
+            case 'cartao': if (window.Aurora) Aurora.cartao(msg); break;      // visual Aurora: cartão flutuante (fontes da pesquisa)
+            case 'terminal':                                       // comando rodando numa janela visível do PowerShell: a saída chega ao vivo
+                if (window.Aurora && window.VISUAL === 'aurora') Aurora.terminal(msg);
+                else if (msg.inicio) aviso('PowerShell: ' + String(msg.comando || '').slice(0, 90), 6000);
+                else if (msg.fim) aviso(msg.codigo === 0 ? 'PowerShell: concluído.' : 'PowerShell: terminou com erro (' + (msg.situacao === 'ok' ? 'código ' + msg.codigo : msg.situacao) + ').', 5000);
+                break;
+            case 'oficina':                                        // arquivo criado/atualizado na Oficina
+                if (window.Aurora && window.VISUAL === 'aurora') Aurora.oficina(msg);
+                else if (msg.evento === 'arquivo') aviso((msg.novo ? 'Criado na Oficina: ' : 'Atualizado na Oficina: ') + msg.caminho, 6000);
+                break;
             case 'stt_estado':                                     // o servidor avisa se a escuta própria está pronta
                 if (msg.estado === 'pronto') {
                     sttPronto = true;
@@ -854,9 +874,11 @@
         });
     }
 
-    // ---- frase curta pré-gravada se a resposta demora: o silêncio é o que dá a sensação de lentidão
-    let fillers = null, fillerAnterior = -1, fillerTimer = 0;
-    const FILLER_APOS_MS = 1000;
+    // ---- frase curta pré-gravada SÓ quando ele começa uma ferramenta lenta (pesquisa, leitura, tela...) e ainda não falou nada.
+    // Antes tocava em todo pedido que passasse de 1 s, inclusive conversa simples: virava "um instante" sem sentido. Máx. 1 por pedido.
+    let fillers = null, fillerAnterior = -1, fillerTimer = 0, fillerNoTurno = false;
+    const FILLER_APOS_MS = 1200;
+    const FERRAMENTA_LENTA = new Set(['PESQUISA', 'LEITURA', 'VISÃO', 'NOTÍCIAS', 'BRIEFING', 'CÂMERA', 'PESQUISA_PROFUNDA']);
     async function carregarFillers() {
         if (fillers) return fillers;
         fillers = [];
@@ -872,7 +894,8 @@
     function agendarFiller() {
         clearTimeout(fillerTimer);
         carregarFillers();
-        if (MUDO) return;
+        if (MUDO || fillerNoTurno) return;
+        fillerNoTurno = true;
         const meu = T.envioEm;
         fillerTimer = setTimeout(() => {
             if (T.envioEm !== meu || T.falaRecebidaEm || tocando || fila.length || !turnoAtivo || !fillers || !fillers.length) return;
@@ -884,7 +907,7 @@
         }, FILLER_APOS_MS);
     }
 
-    function enviarFala(texto) {
+    function enviarFala(texto, anexos, confianca) {
         pararMusica(false);
         pararFala();
         pararReconhecimento();
@@ -892,10 +915,13 @@
         $('legenda-jarvis').textContent = '';
         mostrarVoce(texto, false);
         marcarEnvio();
-        enviar({ tipo: 'fala', texto });
+        const msgFala = anexos && anexos.length ? { tipo: 'fala', texto, anexos } : { tipo: 'fala', texto };
+        if (typeof confianca === 'number' && confianca > 0) msgFala.confianca = confianca;      // certeza do reconhecimento: o servidor avisa o modelo quando é baixa
+        enviar(msgFala);      // anexos: só da barra do visual Aurora (temporários)
+        if (window.Aurora) Aurora.novoTurno();
         setEstado('pensando');             // feedback imediato: o reator reage já, sem esperar o servidor
         Sfx.tocar('recebi');
-        agendarFiller();
+        clearTimeout(fillerTimer); fillerNoTurno = false; carregarFillers();
     }
 
     function interromper() {
@@ -924,10 +950,10 @@
     });
 
     document.addEventListener('keydown', (e) => {
-        const digitando = document.activeElement === $('comando');
-        if (digitando) { if (e.key === 'Escape') $('comando').blur(); return; }
+        const ativo = document.activeElement, digitando = ativo && (ativo.tagName === 'INPUT' || ativo.tagName === 'TEXTAREA');
+        if (digitando) { if (e.key === 'Escape') ativo.blur(); return; }
         if (confirmacao) { if (e.key === 'Escape') responderConfirmacao(false); return; }
-        if (e.key === '/') { e.preventDefault(); $('comando').focus(); }
+        if (e.key === '/') { e.preventDefault(); if (!(window.Aurora && window.VISUAL === 'aurora' && Aurora.focar())) $('comando').focus(); }
         else if (e.key === ' ' || e.key === 'Escape') { e.preventDefault(); interromper(); }
         else if (e.key === 'm' || e.key === 'M') alternarMudo();
         else if (e.key === 'g' || e.key === 'G') alternarGestos();
@@ -1043,22 +1069,36 @@
     }, 1500);
 
     // ------------------------------------------------------------ confirmação
-    const sem = (t) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    function interpretarConfirmacao(texto) {
-        const t = sem(texto);
-        if (/\b(nao|cancela|cancelar|cancelado|negativo|para|pare|deixa|esquece|desiste)\b/.test(t)) return false;
-        if (/\b(confirmo|confirmado|confirma|autorizo|pode (fazer|executar|ir|sim|continuar)|sim|isso|vai|manda ver)\b/.test(t)) return true;
-        return null;
+    // Resposta por voz: true, false, 'fraco' (disse "sim" num pedido ALTO), 'ambiguo' ou null. Regra pura em interrupcao.js (teste em Node).
+    const interpretarConfirmacao = (texto, nivel) => Interrupcao.confirmacao(texto, nivel);
+    function dicaConfirmacao(resp, texto) {
+        const d = $('conf-dica');
+        if (!d) return;
+        const alto = confirmacao && confirmacao.nivel === 'alto';
+        d.textContent = resp === 'fraco' ? 'É arriscado: para seguir, diga “confirmo” (ou clique).'
+            : resp === 'ambiguo' ? 'Ficou ambíguo. Diga só “confirmo” ou “cancela”.'
+            : `Ouvi “${String(texto).slice(0, 60)}”. Diga “${alto ? 'confirmo' : 'sim'}” ou “cancela”.`;
+        d.classList.remove('pisca'); void d.offsetWidth; d.classList.add('pisca');
+        Sfx.tocar('alerta');
     }
 
     function mostrarConfirmacao(m) {
-        confirmacao = { id: m.id };
+        confirmacao = { id: m.id, nivel: m.nivel === 'alto' ? 'alto' : 'medio' };
+        const caixa = $('confirmacao');
+        caixa.classList.toggle('alto', confirmacao.nivel === 'alto');
+        const selo = caixa.querySelector('.conf-selo');
+        if (selo) selo.textContent = confirmacao.nivel === 'alto' ? 'AÇÃO ARRISCADA · CONFIRME' : 'CONFIRMAÇÃO NECESSÁRIA';
+        const dica = $('conf-dica');
+        if (dica) dica.innerHTML = confirmacao.nivel === 'alto' ? 'ou diga <em>confirmo</em> / <em>cancela</em>' : 'ou diga <em>sim</em> / <em>cancela</em>';
         $('conf-titulo').textContent = m.titulo;
         const ul = $('conf-detalhes');
         ul.replaceChildren();
         for (const d of m.detalhes || []) {
             const li = document.createElement('li');
-            li.textContent = d;
+            const risco = /^RISCO:\s*/.test(d);
+            li.textContent = risco ? d.replace(/^RISCO:\s*/, '') : d;
+            if (risco) li.className = 'conf-risco';
+            else if (/^(Comando|Arquivo):/.test(d)) li.className = 'conf-cmd';
             ul.append(li);
         }
         const barra = $('conf-barra');

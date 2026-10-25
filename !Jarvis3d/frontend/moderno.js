@@ -41,7 +41,7 @@
         const btn = (rot, atual, acao) => `<button type="button" class="ml-botao${atual ? ' on' : ''}" data-a="${acao}">${rot}</button>`;
         menu.innerHTML = `
             <h4>Visual</h4>
-            <div class="ml-linha">${btn('Moderno', e.estilo !== 'matrix', 'estilo:moderno')}${btn('Clássico (matrix)', e.estilo === 'matrix', 'estilo:matrix')}</div>
+            <div class="ml-linha">${btn('Aurora', window.VISUAL === 'aurora', 'visual:aurora')}${btn('Moderno', window.VISUAL !== 'aurora' && e.estilo !== 'matrix', 'visual:moderno')}${btn('Clássico (matrix)', window.VISUAL !== 'aurora' && e.estilo === 'matrix', 'visual:matrix')}</div>
             <h4>Modo</h4>
             <div class="ml-linha">${btn('Moderno', false, 'preset:moderno')}${btn('Completo', preset === 'completo', 'preset:completo')}${btn('Só o centro', preset === 'foco', 'preset:foco')}${btn('Cinema', preset === 'cinema', 'preset:cinema')}</div>
             <h4>Painéis</h4>
@@ -55,6 +55,11 @@
         const alvo = ev.target.closest('[data-a]');
         if (!alvo) return;
         const [acao, valor] = alvo.dataset.a.split(':');
+        if (acao === 'visual') {                                // Aurora x painéis (3D): troca e recarrega a tela (a conversa no servidor continua)
+            try { localStorage.setItem('jarvis_visual', valor === 'aurora' ? 'aurora' : '3d'); } catch (_) {}
+            if (valor !== 'aurora') UI.definirEstilo(valor === 'matrix' ? 'matrix' : 'moderno');
+            location.reload(); return;
+        }
         if (acao === 'estilo') UI.definirEstilo(valor);
         else if (acao === 'preset') UI.comando({ comando: 'ui_layout', acao: 'preset', nome: valor });
         else if (acao === 'painel') UI.comando({ comando: 'ui_painel', painel: valor, acao: 'alternar' });
