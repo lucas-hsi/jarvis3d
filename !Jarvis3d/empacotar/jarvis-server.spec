@@ -18,7 +18,7 @@ binarios, ocultos = [], [
     "keyring.backends.Windows", "win32ctypes.core", "comtypes.client",
 ]
 for pacote in ("faster_whisper", "ctranslate2", "onnxruntime", "fastembed", "tokenizers", "uiautomation", "comtypes", "sounddevice",
-               "playwright", "certifi", "av", "anthropic", "tiktoken_ext", "openwakeword", "docx", "openpyxl", "pypdf", "lxml", "mcp", "kokoro_onnx", "espeakng_loader", "phonemizer"):
+               "playwright", "certifi", "av", "anthropic", "tiktoken_ext", "openwakeword", "docx", "openpyxl", "pypdf", "lxml", "mcp", "kokoro_onnx", "espeakng_loader", "phonemizer", "supertonic", "soundfile"):
     try:
         d, b, h = collect_all(pacote)
         datas += d; binarios += b; ocultos += h

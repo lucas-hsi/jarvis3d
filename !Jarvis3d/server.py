@@ -56,6 +56,8 @@ import simulacoes
 import stt
 import telemetria
 import voz_local
+import voz_gemini
+import voz_supertonic
 import memoria
 import navegador
 import oficina
@@ -151,6 +153,22 @@ elif PROVEDOR == "deepseek" and len(DEEPSEEK_KEY) > 20:
     MODELO = CFG.get("modelo_deepseek", "deepseek-flash")
 else:
     PROVEDOR = "anthropic"
+
+# Gemini: cada modelo tem a SUA cota diária grátis no mesmo projeto. Esgotou um, passa ao próximo (mesma chave, sem criar outra conta).
+GEMINI_MODELOS = [MODELO] + [m for m in CFG.get("modelos_gemini_extra", ["gemini-3.1-flash-lite", "gemini-3-flash-preview", "gemini-3.6-flash", "gemini-3.8-flash"]) if m != MODELO] if PROVEDOR == "gemini" else [MODELO]
+GEMINI_SUSPENSO: dict[str, float] = {}           # modelo -> até quando está sem cota
+
+
+def gemini_modelo_atual() -> str:
+    agora = time.monotonic()
+    return next((m for m in GEMINI_MODELOS if GEMINI_SUSPENSO.get(m, 0.0) <= agora), GEMINI_MODELOS[0])
+
+
+def gemini_sem_cota(modelo: str, segundos: int = 3600) -> bool:
+    """Marca o modelo como indisponível (cota ou sobrecarga) por um tempo e diz se ainda sobra outro para tentar."""
+    GEMINI_SUSPENSO[modelo] = time.monotonic() + segundos
+    return any(GEMINI_SUSPENSO.get(m, 0.0) <= time.monotonic() for m in GEMINI_MODELOS)
+
 
 http = httpx.AsyncClient(timeout=20, limits=httpx.Limits(max_keepalive_connections=10, keepalive_expiry=300))    # conexão da voz fica quente (poupa o handshake TLS)
 
@@ -623,8 +641,7 @@ def sistema_agora() -> dict:
 # ------------------------------------------------------------------ prompt
 
 def ler_personalidade() -> str:
-    linhas = caminhos.personalidade().read_text(encoding="utf-8").splitlines()
-    texto = "\n".join(l for l in linhas if not l.lstrip().startswith("# ") and not l.strip() == "#").strip()
+    texto = caminhos.personalidade().read_text(encoding="utf-8").strip()
     return texto.replace("{nome}", NOME).replace("{tratamento}", TRATAMENTO)
 
 
@@ -640,12 +657,20 @@ ESTILOS_SAUDACAO = [
 ]
 
 REGRAS_SISTEMA = """
-DIRETRIZES DE ENGENHARIA DE SISTEMAS (MANDATÓRIAS):
-1. ATUE COMO ESPECIALISTA: Adote a persona de um Engenheiro de Sistemas Sênior com foco em Cibersegurança e DevOps.
-2. NENHUM PREENCHIMENTO: Elimine todas as frases de cortesia, introduções e conclusões genéricas (proibido "É importante notar", "Em resumo", "Para garantir que", "Aqui está o que você pediu").
-3. CÓDIGO EXECUTÁVEL: Todo código gerado deve ser funcional, modular, tratar exceções e usar as melhores práticas da linguagem, pronto para execução.
-4. COMANDOS DIRETOS: Ao gerar comandos de sistema (PowerShell/Bash), entregue comandos exatos, incluindo flags de segurança e tratamento de erros.
-5. ANÁLISE DE IMPACTO SILENCIOSA: Se o comando solicitado tiver impacto no sistema (ex: formatação, kill de processos), inclua uma verificação de integridade prévia no código sem explicações ou justificativas desnecessárias.
+DIRETRIZES DE REPROGRAMAÇÃO COGNITIVA DO JARVIS (v2.0 - FORÇA BRUTAL):
+1. IDENTIDADE OPERACIONAL: Você é o Núcleo de Execução Técnica do Jarvis. Sua função é traduzir a intenção do usuário em artefatos de engenharia de sistemas executáveis, operando como Red Teamer de elite e Arquiteto de Sistemas Sênior.
+2. PROIBIÇÕES ABSOLUTAS:
+   - PROIBIDO JARGÃO DE ACONSELHAMENTO: Nunca use "É importante considerar", "Depende do seu caso", ou "Uma alternativa seria".
+   - PROIBIDO META-COMENTÁRIO: Nunca diga "Aqui está o script" ou "Com base no que você pediu".
+   - PROIBIDO HESITAÇÃO: Nunca use "Pode ser que" ou "Talvez".
+   - PROIBIDO JUSTIFICATIVA VAZIA: Não explique a teoria por trás da solução a menos que solicitado. A teoria deve estar no código, não na prosa.
+3. PROTOCOLO DE ANÁLISE SILENCIOSA (CRITICAL PATH): Antes de gerar a resposta, simule mentalmente falhas em produção, identifique vetores de vulnerabilidade/ineficiência e incorpore a mitigação internamente no código/comando final sem listar riscos em texto.
+4. FORMATO DE SAÍDA OBRIGATÓRIO:
+   - CÓDIGO: Apenas o bloco de código. Sem introdução, sem conclusão.
+   - COMANDO: Apenas o bloco PowerShell/Bash.
+   - ARQUITETURA: Lista numerada de passos técnicos de implementação.
+   - ANÁLISE: Tabela ou JSON estruturado.
+5. RESPOSTA PURA: Vá direto ao ponto, sem preâmbulos, sem jargões e sem hesitação.
 """
 
 REGRAS = REGRAS_SISTEMA + """
@@ -667,7 +692,7 @@ REGRAS FIXAS DE EXECUÇÃO E FERRAMENTAS:
 - Terminal: terminal_executar roda UM comando PowerShell numa janela VISÍVEL (o {nome} vê o comando e a saída). Leitura e o que cria coisas dentro da Oficina rodam direto; o arriscado pede confirmação forte; o destrutivo é bloqueado. Use para sistema/desenvolvimento (git, pip, npm, processos, informações); preencha 'motivo' com poucas palavras e resuma a saída em voz. Para escrever arquivos de código use oficina_escrever (não Set-Content gigante). Nunca rode comandos destrutivos ou baixados da internet sem o usuário pedir exatamente isso.
 - Ouvir bem: a fala do {nome} chega por reconhecimento de voz e às vezes vem com palavras trocadas por outras de som parecido (ex.: "paiton" = Python, "power xel" = PowerShell, "escripte" = script, "pasta" e "basta", "abre" e "abri"). Interprete pela intenção mais provável no contexto da conversa, sem corrigir o {nome} nem comentar o erro. Se a frase não fizer sentido, ou se for um pedido de risco e houver duas leituras possíveis, diga em poucas palavras o que entendeu e pergunte; se for de baixo risco, faça o mais provável.
 - Raciocínio difícil: para análise complexa, plano, código, matemática ou decisão com trade-offs, chame pensar_fundo (modelo maior) e resuma o resultado em voz; para o resto, responda direto.
-- Programas do Windows: PREFIRA janela_ver (controles numerados) e janela_acao (agir pelo número); eles acionam botões e preenchem campos sem adivinhar pixels e devolvem a lista nova a cada ação. Chame iniciar_controle antes de janela_acao. Só use ver_tela + clicar por coordenadas quando janela_ver não mostrar controles. Se uma ferramenta que você precisa não está na sua lista, chame habilitar_ferramentas.
+- Programas do Windows: PREFIRA janela_ver (controles numerados) e janela_acao (agir pelo número); eles acionam botões e preenchem campos sem adivinhar pixels e devolvem a lista nova a cada ação. Chame iniciar_controle antes de janela_acao. Só use ver_tela + clicar por coordenadas quando janela_ver não mostrar controles. Nem toda ferramenta está na sua lista a cada pedido (para ser rápido): se precisar de algo que não está (pesquisar na web e notícias, cofre do Obsidian, lembretes/rotinas/clima, arquivos, PC e Oficina, navegador e YouTube, Google, câmera, visual da tela), chame habilitar_ferramentas com o grupo e use a ferramenta no mesmo pedido, sem avisar e sem dizer que não consegue.
 - Para mexer com mouse e teclado: chame iniciar_controle, depois ver_tela, e vá em passos curtos conferindo o print que volta de cada ação. Não chame ferramentas de controle em paralelo. Se o freio de emergência disparar ou o usuário recusar, pare e diga que parou.
 - Navegador e música: para tocar música ou vídeo use youtube_buscar (busque pelo nome da música e do artista) e controle com video_controle (pausar, continuar, próxima faixa, pular anúncio, avançar, volume...). Para operar um site, use navegador_ver para ver os elementos numerados e então navegador_clicar ou navegador_digitar pelo NÚMERO; isso é bem mais confiável do que clicar na tela. Use clicar/digitar da tela (modo controle) só para programas fora do navegador. Nunca diga que não consegue clicar ou pular sem antes tentar essas ferramentas. Se o anúncio não tem o botão Pular, diga que ele não é pulável e quanto falta.
 - Tela: você controla o visual da própria tela por voz com ui_tema, ui_painel, ui_layout, ui_reator e ui_efeito (ex.: "tema vermelho", "esconde os painéis", "modo foco", "reator em esfera"). Confirme com uma frase curta e natural.
@@ -808,13 +833,28 @@ def _voz_local_permitida() -> bool:
     return os.environ.get("JARVIS_SEM_VOZ") != "1" and CFG.get("voz_local", "auto") != "off"
 
 
+async def voz_reserva(texto: str, emocao: str | None = None) -> bytes:
+    """Sem ElevenLabs: Supertonic (local, grátis, sem limite); depois a voz do Gemini (cota grátis apertada); depois a Kokoro; vazio = o navegador fala."""
+    if not _voz_local_permitida():
+        return b""
+    if CFG.get("voz_supertonic", True) and voz_supertonic.disponivel():
+        audio = await voz_supertonic.sintetizar(texto, emocao, CFG.get("voz_supertonic_voz", "M1"))
+        if audio:
+            return audio
+    if CFG.get("voz_gemini", True) and len(GEMINI_KEY) > 20:
+        audio = await voz_gemini.sintetizar(texto, emocao, GEMINI_KEY, CFG.get("voz_gemini_voz", "Orus"), CFG.get("voz_gemini_modelos"))
+        if audio:
+            return audio
+    return await voz_local.sintetizar(texto, emocao, CFG.get("voz_local_voz", "pm_alex"))
+
+
 async def sintetizar(texto: str, anterior: str = "", emocao: str | None = None) -> bytes:
-    """Áudio da frase: ElevenLabs (MP3); se ela não está disponível ou falhou, a voz LOCAL gratuita (WAV); vazio = o navegador fala com a voz dele."""
+    """Áudio da frase: ElevenLabs (MP3); se ela não está disponível ou falhou, a voz do Gemini e depois a LOCAL gratuita (WAV); vazio = o navegador fala com a voz dele."""
     if _voz_local_permitida() and CFG.get("voz_local") == "preferir" and voz_local.disponivel():
         return await voz_local.sintetizar(texto, emocao, CFG.get("voz_local_voz", "pm_alex"))
     audio = await _sintetizar_eleven(texto, anterior, emocao)
-    if not audio and texto and _voz_local_permitida():
-        audio = await voz_local.sintetizar(texto, emocao, CFG.get("voz_local_voz", "pm_alex"))
+    if not audio and texto:
+        audio = await voz_reserva(texto, emocao)
     return audio
 
 
@@ -855,7 +895,7 @@ async def _sintetizar_eleven(texto: str, anterior: str = "", emocao: str | None 
             print(f"[jarvis] voz: HTTP {r.status_code} {detalhe}", flush=True)
             if r.status_code in (401, 402) or detalhe == "quota_exceeded":
                 VOZ["desligada"] = True
-                await avisar_todos("Voz da ElevenLabs indisponível (chave ou cota). Usando a voz do navegador.")
+                await avisar_todos("Voz da ElevenLabs indisponível (chave ou cota). Usando a voz reserva (Gemini).")
                 await broadcast(painel())
                 return b""
             if r.status_code == 429:
@@ -913,7 +953,7 @@ async def sintetizar_stream(texto: str, anterior: str = "", emocao: str | None =
                     print(f"[jarvis] voz (stream): HTTP {r.status_code} {detalhe}", flush=True)
                     if r.status_code in (401, 402) or detalhe == "quota_exceeded":
                         VOZ["desligada"] = True
-                        await avisar_todos("Voz da ElevenLabs indisponível (chave ou cota). Usando a voz do navegador.")
+                        await avisar_todos("Voz da ElevenLabs indisponível (chave ou cota). Usando a voz reserva (Gemini).")
                         await broadcast(painel())
                         return
                     if r.status_code == 429:
@@ -987,7 +1027,7 @@ class Falante:
                 break
             await saida.novo.wait()
         if not saida.chunks:                            # sem áudio da ElevenLabs: voz local gratuita; sem ela, o navegador fala com a voz dele
-            local = await voz_local.sintetizar(frase, emocao, CFG.get("voz_local_voz", "pm_alex")) if _voz_local_permitida() else b""
+            local = await voz_reserva(frase, emocao)
             await self.sessao.enviar({"tipo": "fala", "texto": frase, "emocao": emocao, "audio": base64.b64encode(local).decode() if local else ""})
             return
         latencia.marca("primeiro_audio_enviado")
@@ -1514,7 +1554,10 @@ async def aprender_em_segundo_plano(fala_usuario: str, resposta: str):
     if SIMULAR:
         return        # avaliação de cenários: não aprende nada nem gasta uma chamada extra
     try:
-        itens = await cerebro.aprender(ai, MODELO, MEM, NOME, fala_usuario, resposta)
+        suspenso = ai_reserva is not None and (time.monotonic() < DEEPSEEK_SUSPENSO["ate"]        # principal sem cota: não gasta outra chamada (e erro 429) só para aprender
+                                               or (PROVEDOR == "gemini" and provedor.deepseek(ai_reserva) and CFG.get("aprender_na_reserva", False)))     # aprender é tarefa de fundo: o DeepSeek barato faz, o Gemini fica para a conversa
+        itens = await (cerebro.aprender(ai_reserva, MODELO_RESERVA, MEM, NOME, fala_usuario, resposta) if suspenso
+                       else cerebro.aprender(ai, gemini_modelo_atual() if PROVEDOR == "gemini" else MODELO, MEM, NOME, fala_usuario, resposta))
         if itens:
             await asyncio.to_thread(atualizar_espelho)
         for item in itens:
@@ -1625,7 +1668,12 @@ async def conversar(sessao: Sessao, texto_usuario: str, ativacao: bool, anexos: 
         {"midia": navegador._midia_ativa, "controle": sessao.controle["ativo"], "gravando": sessao.direcao.ativa})
     usados: dict = {}
     usando_reserva = ai_reserva is not None and time.monotonic() < DEEPSEEK_SUSPENSO["ate"]
-    modelo_turno = MODELO
+    hibrido = (not usando_reserva and PROVEDOR == "gemini" and ai_reserva is not None and provedor.deepseek(ai_reserva)
+               and CFG.get("hibrido_ferramentas", False) and bool({"pc", "arquivos"} & set(grupos)))
+    if hibrido:                                                    # mexer em janelas/arquivos e escrever na Oficina: o DeepSeek faz o turno inteiro, o Gemini fica para a conversa (cada um tem a sua cota)
+        usando_reserva = True
+        latencia.evento("hibrido:deepseek")
+    modelo_turno = gemini_modelo_atual() if PROVEDOR == "gemini" else MODELO
     if (PROVEDOR == "deepseek" and not usando_reserva and not ativacao and CFG.get("roteador_de_modelo", True) and especialistas.parece_dificil(texto_usuario)
             and custos.dentro_do_orcamento(float(CFG.get("orcamento_diario_usd", 0.50))) and not sessao.tela_ativa and not blocos_anexo):
         modelo_turno = MODELO_PROFUNDO                             # pergunta difícil: modelo maior neste pedido (sem visão), se o teto de gasto do dia permitir
@@ -1666,13 +1714,13 @@ async def conversar(sessao: Sessao, texto_usuario: str, ativacao: bool, anexos: 
 
     try:
         for _ in range(MAX_VOLTAS_FERRAMENTA):
-            for tentativa in range(2):
+            for tentativa in range(2 + len(GEMINI_MODELOS)):       # sobra tentativa para girar entre os modelos Gemini e ainda cair na reserva
                 buffer = ""
                 t_rodada, ms_primeiro_token = time.perf_counter(), None
                 ferr_rodada = ferramentas_da_rodada()
                 try:
                     cliente, modelo_da_vez = (ai_reserva, MODELO_RESERVA) if usando_reserva else (ai, modelo_turno)
-                    extras = {"output_config": {"effort": ESFORCO}} if (PROVEDOR == "anthropic" or usando_reserva) else (
+                    extras = provedor.extras(cliente, ESFORCO) if usando_reserva else {"output_config": {"effort": ESFORCO}} if PROVEDOR == "anthropic" else (
                         {} if (PROVEDOR == "gemini" or modelo_turno != MODELO) else {"thinking": {"type": "disabled"}})      # DeepSeek rápido: sem raciocínio (mais veloz e aceita ferramentas); o modelo maior raciocina
                     async with cliente.messages.stream(
                         model=modelo_da_vez, max_tokens=2000, system=sistema_da_rodada(), tools=ferr_rodada, messages=mensagens, **extras,
@@ -1686,12 +1734,24 @@ async def conversar(sessao: Sessao, texto_usuario: str, ativacao: bool, anexos: 
                     custos.registrar(modelo_da_vez, resposta.usage)
                     break
                 except (anthropic.APIConnectionError, anthropic.InternalServerError, anthropic.RateLimitError, anthropic.APITimeoutError, RuntimeError) as e:
-                    if tentativa == 0 and ai_reserva is not None and not usando_reserva and not buffer:       # o principal caiu antes de falar: reserva neste pedido
+                    sobrecarga = "503" in str(e) or "UNAVAILABLE" in str(e)
+                    if (PROVEDOR == "gemini" and not usando_reserva and not buffer and (sobrecarga or "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e))
+                            and gemini_sem_cota(modelo_da_vez, 120 if sobrecarga else 3600)):         # sem cota ou sobrecarregado: tenta o próximo modelo (cada um tem a sua cota)
+                        modelo_turno = gemini_modelo_atual()
+                        print(f"[jarvis] {modelo_da_vez} sem cota; passando para {modelo_turno}", flush=True)
+                        latencia.evento("gemini_modelo:" + modelo_turno)
+                        continue
+                    if ai_reserva is not None and not usando_reserva and not buffer:       # o principal caiu antes de falar: reserva neste pedido
                         usando_reserva = True
-                        DEEPSEEK_SUSPENSO["ate"] = time.monotonic() + 300
+                        sem_cota = "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e)
+                        DEEPSEEK_SUSPENSO["ate"] = time.monotonic() + (1800 if sem_cota else 300)      # cota diária esgotada: não insiste a cada pedido
                         nome_reserva = "DeepSeek" if PROVEDOR == "gemini" and len(DEEPSEEK_KEY) > 20 else "Anthropic"
                         print(f"[jarvis] {PROVEDOR} indisponível ({type(e).__name__}); usando a reserva ({nome_reserva}) neste pedido", flush=True)
                         latencia.evento("reserva:" + type(e).__name__)
+                        continue
+                    if hibrido and usando_reserva and not buffer:       # o DeepSeek falhou no turno híbrido: o Gemini assume
+                        usando_reserva = hibrido = False
+                        print(f"[jarvis] deepseek indisponível no turno híbrido ({type(e).__name__}); voltando ao {PROVEDOR}", flush=True)
                         continue
                     raise
                 except anthropic.BadRequestError as e:

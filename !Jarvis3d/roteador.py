@@ -13,24 +13,30 @@ A ORDEM das ferramentas é estável (necessária para o cache de prompt acertar 
 import re
 import unicodedata
 
-GRUPOS_ORDEM = ("nucleo", "arquivos", "pc", "navegador", "google", "camera", "interface", "mcp")
+GRUPOS_ORDEM = ("nucleo", "pesquisa", "cofre", "rotinas", "arquivos", "pc", "navegador", "google", "camera", "interface", "mcp")
 
+# NÚCLEO enxuto (2026-10-26): só o que uma conversa comum precisa. Eram 29 ferramentas (~4,4 mil tokens) em TODA chamada.
 NUCLEO = {
-    "pesquisar_web", "ler_pagina", "abrir_site", "ver_tela", "noticias", "abrir_programa", "consultar_cofre", "ler_nota",
-    "controlar_volume", "controlar_midia", "lembrar", "buscar_memoria", "esquecer_memoria", "anotar_no_cofre",
-    "acrescentar_no_cofre", "trilha_sonora", "encerrar_conversa", "dormir", "habilitar_ferramentas", "briefing", "pensar_fundo", "modo_especialista", "pesquisa_profunda", "lembrete_voz", "vigiar_cotacao", "rotina_salvar", "rotina_executar", "proativo_gerenciar", "mostrar_clima",
+    "abrir_programa", "controlar_volume", "controlar_midia", "lembrar", "buscar_memoria", "esquecer_memoria",
+    "encerrar_conversa", "dormir", "habilitar_ferramentas", "briefing",
 }
+PESQUISA = {"pesquisar_web", "ler_pagina", "abrir_site", "noticias", "pesquisa_profunda", "pensar_fundo", "modo_especialista"}
+COFRE = {"consultar_cofre", "ler_nota", "anotar_no_cofre", "acrescentar_no_cofre"}
+ROTINAS = {"lembrete_voz", "vigiar_cotacao", "rotina_salvar", "rotina_executar", "proativo_gerenciar", "mostrar_clima", "trilha_sonora"}
 ARQUIVOS = {"listar_pasta", "organizar_pasta", "mover_itens", "renomear_item", "criar_pasta", "mover_para_lixo",
             "desfazer_organizacao", "abrir_pasta", "ler_documento", "criar_documento", "buscar_documentos"}
 PC = {"listar_janelas", "gerenciar_janela", "mostrar_area_de_trabalho", "bloquear_tela", "iniciar_controle", "clicar",
-      "digitar", "pressionar_teclas", "rolar", "janela_ver", "janela_acao", "terminal_executar",
+      "digitar", "pressionar_teclas", "rolar", "janela_ver", "janela_acao", "terminal_executar", "ver_tela",
       "oficina_escrever", "oficina_rodar", "oficina_ler", "oficina_listar", "oficina_abrir"}
 CAMERA = {"ver_camera", "modo_gravacao"}
 NAVEGADOR_EXTRA = {"youtube_buscar", "video_controle"}
 
 DESCRICAO_GRUPOS = {
+    "pesquisa": "pesquisar na web, ler páginas, notícias, pesquisa profunda, abrir um site, pensar a fundo (modelo maior) e modos especialistas",
+    "cofre": "ler, buscar e anotar no cofre do Obsidian (notas, ideias, projetos)",
+    "rotinas": "lembretes por voz, alertas de cotação, rotinas, clima, trilha sonora e o que o Jarvis faz sozinho",
     "arquivos": "listar, organizar, mover, renomear e mandar para o lixo arquivos e pastas (Downloads, Documentos, Área de Trabalho)",
-    "pc": "janelas do Windows, clicar/digitar em programas (janela_ver/janela_acao), mouse, teclado, bloquear a tela, terminal PowerShell visível e a OFICINA (criar/rodar arquivos, scripts e pequenos programas)",
+    "pc": "ver a tela, janelas do Windows, clicar/digitar em programas (janela_ver/janela_acao), mouse, teclado, bloquear a tela, terminal PowerShell visível e a OFICINA (criar/rodar arquivos, scripts e pequenos programas)",
     "navegador": "YouTube e música, controle de vídeo, abrir e operar sites no navegador do Jarvis",
     "google": "Google Agenda, Gmail e Drive",
     "camera": "webcam (olhar roupa/objetos) e modo gravação de vídeo",
@@ -42,12 +48,9 @@ DESCRICAO_GRUPOS = {
 def grupo_de(nome: str) -> str:
     if nome in NUCLEO:
         return "nucleo"
-    if nome in ARQUIVOS:
-        return "arquivos"
-    if nome in PC:
-        return "pc"
-    if nome in CAMERA:
-        return "camera"
+    for grupo, nomes in (("pesquisa", PESQUISA), ("cofre", COFRE), ("rotinas", ROTINAS), ("arquivos", ARQUIVOS), ("pc", PC), ("camera", CAMERA)):
+        if nome in nomes:
+            return grupo
     if nome in NAVEGADOR_EXTRA or nome.startswith("navegador_"):
         return "navegador"
     if nome.startswith(("agenda_", "email_", "drive_", "google_")):
@@ -63,21 +66,31 @@ def _norm(t: str) -> str:
     return unicodedata.normalize("NFKD", t).encode("ascii", "ignore").decode().lower()
 
 
+# Gatilhos (sobre o texto sem acento e em minúsculas). Apertados em 2026-10-26: palavras comuns como "abre", "tela", "programa", "sistema",
+# "criar", "lembra", "google", "contrato" ligavam grupos inteiros à toa. Se faltar algo, o modelo chama `habilitar_ferramentas`.
 GATILHOS = {
-    "arquivos": re.compile(r"pasta|arquivo|download|documento|organiz|renome|lixeira|lixo|desfaz|\bmov[ae]|imagens|\bpdf|baixad|planilha|excel|\bword\b|docx|xlsx|relatorio|contrato|curriculo|resum[ae]|\bler\b|le o|onde (esta|ficou)|acha"),
-    "pc": re.compile(r"janela|minimiz|maximiz|\bfech|clic|digit|escrev|\btecla|atalho|mouse|\brol(e|ar)|desktop|area de trabalho|"
-                     r"bloque|\btela|programa|aplicativ|\bapp\b|botao|\bmenu|instal|configurac|painel de controle|abr[ae]|"
-                     r"word|excel|bloco de notas|explorador|calculadora|whatsapp|discord|spotify|obs\b|vscode|terminal|comando|powershell|power ?xel|\bcmd\b|\bpip\b|\bnpm\b|\bgit\b|executa|roda o|roda a|instala|"
-                     r"script|escript|python|paiton|codigo|programinha|sistema|oficina|automatiz|desenvolv|\bcri[ae]r?\b|\bcrie\b|\bfaz (um|uma)\b|"
-                     r"arquivo|\.py\b|html|site simples|calculadora|aplicac|ferramenta pra|bot\b|planilha automat"),
-    "navegador": re.compile(r"youtube|music|\bsom\b|toc[ae]|toque|video|\bpul[ae]|proxim|anterior|pausa|continu|anunci|\bsite|pagina|"
-                            r"navegador|\baba|pesquis|google|\blink|login|entra |compr|playlist|letra|\bclip|\bbusca|procura|"
-                            r"mercado livre|olx|amazon|instagram|facebook|linkedin|\bweb\b|internet|\bhttp|\.com"),
-    "google": re.compile(r"agenda|e-?mail|gmail|drive|lembret|lembra|compromisso|reuniao|calendario|google|rascunho|evento|"
-                         r"caixa de entrada|convite|marcar|nao lid|remetente|anexo"),
-    "camera": re.compile(r"camera|webcam|\bfoto|me ve|olha pra|olhe|roupa|grav|film|vestid|outfit|enquadr|iluminac"),
-    "interface": re.compile(r"\btema|painel|paineis|layout|reator|\bcor\b|\bcores\b|efeito|interface|visual|esfera|minimo|"
-                            r"modo foco|esconde|mostra os|brilho|animac|fundo|vermelho|azul|verde|ambar"),
+    "pesquisa": re.compile(r"pesquis|notici|manchete|internet|\bweb\b|\bsite\b|pagina|\blink\b|http|\.com|\bbusca|procura|cotacao|\bpreco|quanto custa|"
+                           r"ultim[ao]s?\b|atualmente|analis|compar[ae]|vale a pena|estrateg|plano de|pros e contras|aprofund|especialista|"
+                           r"modo (financas|saude|codigo|redacao|estudo|negocios|juridico)|pensa (bem|fundo)|raciocin"),
+    "cofre": re.compile(r"\bcofre\b|obsidian|(?<!bloco de )\bnotas?\b|anot|pendenc|o que (eu )?(salvei|decidi|escrevi)|\bvault\b|diario|\bideias?\b|aprendizado|registr[ae]|guarda isso|salva isso|"
+                        r"meus? projetos?|\bprojeto\b|decisao|decisoes"),
+    "rotinas": re.compile(r"\bme lembr|\blembretes?\b|daqui a|em \d+ (min|hora)|\bavis[ae]|dolar|bitcoin|cotacao|\brotina|modo trabalho|"
+                          r"resumo do dia|clima|previsao|temperatura|chover|\bchuva|trilha|musica de acao|adrenalina|proativ"),
+    "arquivos": re.compile(r"\bpastas?\b|arquivos?\b|download|organiz|renome|lixeira|\bmov[ae]\b|\bmova\b|desfaz.*organiz|\bpdf|planilha|\bexcel\b|"
+                           r"\bdocx?\b|\bxlsx\b|\bword\b|documentos?\b|area de trabalho|onde (esta|ficou) (o|a|meu|minha)"),
+    "pc": re.compile(r"janela|minimiz|maximiz|\bfech(a|ar|e) (a|o|essa|esse)|\bclic|digit(a|e|ar)\b|\btecla|atalho|mouse|\brol(e|ar)\b|"
+                     r"area de trabalho|bloque(ia|ar)|trav(a|ar) a tela|\bbotao|terminal|comando|powershell|power ?xel|\bcmd\b|\bpip\b|\bnpm\b|\bgit\b|"
+                     r"executa|roda (o|a|esse|esse)|instal(a|e|ar)\b|script|escript|python|paiton|codigo|programinha|oficina|automatiz|desenvolv|"
+                     r"\bcri(a|e|ar) (um|uma|o|a) (script|programa|app|aplicativo|site|bot|codigo|arquivo|pagina|ferramenta|calculadora)|"
+                     r"\.py\b|html|\btela\b|\bprint\b|\bve (a|o|isso)\b|olha (a|o|isso|minha)|le (a|o) (tela|que)|na minha tela|painel de controle"),
+    "navegador": re.compile(r"youtube|music|\bsom\b|toc[ae]\b|toque|video|\bpul[ae]|proxim|anterior|pausa|continu|anunci|"
+                            r"navegador|\baba\b|\blogin\b|entra no|preench|playlist|letra d|\bclip|mercado livre|olx|amazon|instagram|facebook|"
+                            r"linkedin|compr(a|ar|e) |\bsite\b|\bwww|http|\.com"),
+    "google": re.compile(r"agenda|e-?mail|gmail|\bdrive\b|compromisso|reuniao|calendario|rascunho|caixa de entrada|convite|marcar (uma |a )?(reuniao|consulta|compromisso)|"
+                         r"\bevento|nao lid|remetente|anexo"),
+    "camera": re.compile(r"camera|webcam|\bfoto\b|me ve\b|olha pra mim|olhe pra mim|roupa|grav(a|ar|acao)|film(a|ar)|vestid|outfit|enquadr|iluminac"),
+    "interface": re.compile(r"\btema\b|\bpainel\b|paineis|\blayout\b|reator|\bcores?\b|efeito|interface|esfera|modo foco|brilho|animac|"
+                            r"(muda|troca|coloca|deixa|pinta).*(vermelh|azul|verde|ambar|roxo|laranja)|esconde (o|os) |mostra (o|os) (painel|paineis)"),
 }
 
 TURNOS_PEGAJOSO = 3        # um grupo usado/ativado continua disponível nos turnos seguintes ("pula essa", "mais alto")

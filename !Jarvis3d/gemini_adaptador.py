@@ -281,6 +281,12 @@ class _StreamContextManager:
         return self._final_message or ResponseMessage([], "end_turn", Usage())
 
 
+def esforco_de_raciocinio(modelo: str) -> str:
+    """Pouco raciocínio: conversa por voz não pode esperar o modelo pensar (medido: 3-flash-preview 2,5 s -> 1,1 s com 'minimal').
+    Os modelos 3.6/3.8 não aceitam 'minimal' (erro 400); neles o mais baixo é 'low'."""
+    return "low" if any(v in modelo for v in ("3.6", "3.8")) else "minimal"
+
+
 class _MessagesAPI:
     def __init__(self, cliente_gemini):
         self._cliente = cliente_gemini
@@ -292,6 +298,7 @@ class _MessagesAPI:
             "max_tokens": max_tokens,
             "stream": True
         }
+        payload["reasoning_effort"] = esforco_de_raciocinio(payload["model"])
         tools_conv = _converter_ferramentas(tools)
         if tools_conv:
             payload["tools"] = tools_conv
@@ -304,6 +311,7 @@ class _MessagesAPI:
             "max_tokens": max_tokens,
             "stream": False
         }
+        payload["reasoning_effort"] = esforco_de_raciocinio(payload["model"])
         tools_conv = _converter_ferramentas(tools)
         if tools_conv:
             payload["tools"] = tools_conv

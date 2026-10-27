@@ -18,6 +18,7 @@ VELOCIDADE = {"neutro": 1.05, "animado": 1.12, "adrenalina": 1.2, "triunfante": 
               "curioso": 1.04, "irritado": 1.1, "suspiro": 0.95}
 _k = {"m": None, "falhou": False}
 _trava = threading.Lock()
+_fila = asyncio.Lock()
 
 
 def pasta():
@@ -56,7 +57,8 @@ async def sintetizar(texto: str, emocao: str | None = None, voz: str = "pm_alex"
     if not texto.strip() or not disponivel():
         return b""
     try:
-        return await asyncio.to_thread(_sintetizar, texto[:600], emocao, voz)
+        async with _fila:                       # uma frase por vez: em paralelo disputavam a CPU e a 1ª demorava mais
+            return await asyncio.to_thread(_sintetizar, texto[:600], emocao, voz)
     except Exception as e:
         print(f"[jarvis] voz local falhou ({type(e).__name__}: {str(e)[:80]})", flush=True)
         _k["falhou"] = True

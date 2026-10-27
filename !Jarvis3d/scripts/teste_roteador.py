@@ -32,7 +32,9 @@ def checar(cond, texto):
 
 TODAS = (ferramentas.definicoes({"chrome": "chrome"}, True) + cerebro.definicoes(True) + [camera.definicao(), direcao.definicao()]
          + navegador.definicoes() + interface.definicoes() + google_tools.definicoes(True)
-         + [{"name": "trilha_sonora"}, {"name": "encerrar_conversa"}, {"name": "dormir"}, briefing.DEFINICAO, roteador.FERRAMENTA_HABILITAR])
+         + [{"name": "trilha_sonora"}, {"name": "encerrar_conversa"}, {"name": "dormir"}, {"name": "pensar_fundo"}, {"name": "pesquisa_profunda"},
+            {"name": "modo_especialista"}, {"name": "lembrete_voz"}, {"name": "vigiar_cotacao"}, {"name": "rotina_salvar"}, {"name": "rotina_executar"},
+            {"name": "proativo_gerenciar"}, {"name": "mostrar_clima"}, briefing.DEFINICAO, roteador.FERRAMENTA_HABILITAR])
 NOMES = {t["name"] for t in TODAS}
 
 
@@ -50,14 +52,18 @@ checar({"email_enviar", "agenda_criar", "drive_listar", "google_status"} <= por_
 checar({"clicar", "iniciar_controle", "listar_janelas"} <= por_grupo["pc"], "controle do PC no grupo pc")
 checar({"ui_tema", "ui_reator"} <= por_grupo["interface"], "visual no grupo interface")
 checar({"ver_camera", "modo_gravacao"} == por_grupo["camera"], "câmera e gravação no grupo camera")
-checar({"consultar_cofre", "lembrar", "pesquisar_web", "dormir", "habilitar_ferramentas"} <= por_grupo["nucleo"], "núcleo tem cofre, memória, web, dormir e o escape")
-checar("briefing" in por_grupo["nucleo"], "briefing está no núcleo (sempre disponível)")
+checar({"lembrar", "buscar_memoria", "abrir_programa", "controlar_volume", "dormir", "habilitar_ferramentas", "briefing"} <= por_grupo["nucleo"], "núcleo tem memória, abrir programa, volume, dormir, briefing e o escape")
+checar(len(por_grupo["nucleo"]) <= 12, f"núcleo enxuto: {len(por_grupo['nucleo'])} ferramentas (eram 29)")
+checar({"pesquisar_web", "noticias", "pensar_fundo"} <= por_grupo["pesquisa"], "web e raciocínio fundo no grupo pesquisa")
+checar({"consultar_cofre", "anotar_no_cofre"} <= por_grupo["cofre"], "cofre no grupo cofre")
+checar({"lembrete_voz", "mostrar_clima"} <= por_grupo["rotinas"], "lembretes e clima no grupo rotinas")
+checar("ver_tela" in por_grupo["pc"], "ver_tela no grupo pc")
 
 print("\n2) A SAUDAÇÃO das palmas vai só com o núcleo")
 g = grupos("(palmas)", ativacao=True)
 checar(g == {"nucleo"}, f"grupos: {g}")
 n_saudacao = len(roteador.filtrar(TODAS, g))
-checar(n_saudacao < 25, f"{n_saudacao} ferramentas de {len(TODAS)} (antes eram todas)")
+checar(n_saudacao <= 12, f"{n_saudacao} ferramentas de {len(TODAS)} (antes eram todas)")
 
 print("\n3) O ASSUNTO liga o grupo certo")
 casos = [
@@ -72,12 +78,23 @@ casos = [
     ("vou gravar um vídeo", "camera"),
     ("muda o tema para vermelho", "interface"),
     ("abre o site do mercado livre", "navegador"),
+    ("pesquisa as notícias de hoje", "pesquisa"),
+    ("anota no cofre essa ideia", "cofre"),
+    ("me lembra daqui a 10 minutos de ligar pra Ana", "rotinas"),
+    ("como está o clima hoje?", "rotinas"),
+    ("o que tem na minha tela?", "pc"),
+    ("cria um script python que renomeia arquivos", "pc"),
 ]
 for texto, esperado in casos:
     g = grupos(texto)
     checar(esperado in g, f"'{texto}' → {esperado}  (grupos: {sorted(g)})")
-g = grupos("qual a capital da França?")
-checar(g == {"nucleo"}, f"pergunta simples fica só no núcleo: {sorted(g)}")
+for simples in ("qual a capital da França?", "oi, tudo bem?", "abre a calculadora", "lembra que eu gosto de café sem açúcar",
+                "me explica o que é um contrato de aluguel", "quanto é 15 por cento de 340?", "digita olá no bloco de notas"):
+    g = grupos(simples)
+    if simples.startswith("digita"):
+        checar("cofre" not in g, f"'bloco de notas' não liga o cofre: {sorted(g)}")
+    else:
+        checar(g == {"nucleo"}, f"'{simples}' fica só no núcleo: {sorted(g)}")
 
 print("\n4) PEGAJOSO: 'mais alto' logo depois de tocar música ainda acha as ferramentas")
 mem = {}
